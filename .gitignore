@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+node_modules
+
+# Source data with hospital financial records
+*.xlsx
+*.xls
+*.csv
+dashboard_data.json
+webapp/dashboard_data.json
+webapp/data.js
+apps_script/Client.html
+
+# Generated artifacts
+outputs/
+repair_hat_samran/
+repair_hat_samran_fixed/
+
+# Local/editor files
+.DS_Store
+.env
+.env.*
+
+# Keep sample env files trackable
+!.env.example

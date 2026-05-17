@@ -1,0 +1,177 @@
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand-block">
+      <p class="eyebrow">จังหวัดตรัง</p>
+      <h1>ระบบตรวจทานเจ้าหนี้/ลูกหนี้ระหว่างโรงพยาบาล</h1>
+      <p class="source-line" id="sourceLine">กำลังโหลดข้อมูล...</p>
+    </div>
+    <div class="toolbar" aria-label="ตัวกรองหลัก">
+      <label>
+        งวดบัญชี
+        <select id="periodSelect"></select>
+      </label>
+      <label>
+        โรงพยาบาล
+        <select id="hospitalSelect"></select>
+      </label>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="มุมมองหลัก">
+    <button class="tab is-active" type="button" data-view="dashboard">ภาพรวม</button>
+    <button class="tab" type="button" data-view="trang">รพ.ตรัง ↔ รพช.</button>
+    <button class="tab" type="button" data-view="reconcile">งบทดลอง</button>
+    <button class="tab" type="button" data-view="monthly">กรอกรายเดือน</button>
+    <button class="tab" type="button" data-view="matrix">Matrix</button>
+    <button class="tab" type="button" data-view="ledger">ทะเบียนเจ้าหนี้</button>
+  </nav>
+
+  <main>
+    <section class="view is-active" id="dashboardView" data-view="dashboard">
+      <div class="stat-grid" id="kpiGrid"></div>
+      <div class="two-column">
+        <section class="panel chart-panel">
+          <div class="panel-heading">
+            <h2>ยอดสุทธิฝั่ง รพ.ตรัง</h2>
+            <span class="badge">9 รพช.</span>
+          </div>
+          <div id="netChart" class="chart-box"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>รายการที่ต้องตรวจสอบ</h2>
+            <span class="badge badge-warn" id="alertCount">0 รายการ</span>
+          </div>
+          <div id="alertList" class="alert-list"></div>
+        </section>
+      </div>
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>สรุปคู่บัญชี รพ.ตรังกับ รพช.</h2>
+          <button class="icon-button" type="button" id="exportTrangCsv" title="ส่งออก CSV">CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table id="trangSummaryTable"></table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="trangView" data-view="trang">
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>เปรียบเทียบ รพ.ตรังกับโรงพยาบาลชุมชน</h2>
+          <div class="segmented" role="group" aria-label="เรียงข้อมูล">
+            <button class="segment is-active" type="button" data-sort="net">สุทธิ</button>
+            <button class="segment" type="button" data-sort="community">รพช.ต้องจ่าย</button>
+            <button class="segment" type="button" data-sort="trang">รพ.ตรังต้องจ่าย</button>
+          </div>
+        </div>
+        <div id="trangBars" class="chart-box chart-tall"></div>
+        <div class="table-wrap">
+          <table id="trangCompareTable"></table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="reconcileView" data-view="reconcile">
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>ตรวจสอบทะเบียนเจ้าหนี้กับงบทดลอง</h2>
+          <div class="filters">
+            <label>
+              สถานะ
+              <select id="reconcileStatus">
+                <option value="all">ทั้งหมด</option>
+                <option value="review">ตรวจสอบ</option>
+                <option value="ok">OK</option>
+              </select>
+            </label>
+            <label>
+              ค้นหา
+              <input id="reconcileSearch" type="search" placeholder="ชื่อโรงพยาบาล" />
+            </label>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="reconcileTable"></table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="monthlyView" data-view="monthly">
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>แบบฟอร์มบันทึกยอดรายเดือน</h2>
+          <div class="actions">
+            <button type="button" id="copyAprilButton">ใช้ยอด เม.ย.69</button>
+            <button type="button" id="loadMonthlyButton">โหลดจาก Sheet</button>
+            <button type="button" id="saveMonthlyButton">บันทึกเข้า Sheet</button>
+            <button type="button" id="exportMonthlyCsv">CSV</button>
+            <button type="button" id="exportMonthlyJson">JSON</button>
+            <button type="button" class="ghost danger" id="resetMonthlyButton">ล้างหน้าจอ</button>
+          </div>
+        </div>
+        <div class="backend-bar" id="backendBar">
+          <label>
+            Apps Script Web App URL
+            <input id="backendUrlInput" type="url" placeholder="ใช้โหมด Apps Script โดยตรง" disabled />
+          </label>
+          <button type="button" id="saveBackendUrlButton" disabled>ใช้ URL นี้</button>
+          <output id="backendStatus">เชื่อม Sheet ผ่าน Apps Script</output>
+        </div>
+        <div class="entry-bar">
+          <label>
+            เดือนบันทึก
+            <select id="entryPeriod"></select>
+          </label>
+          <label>
+            ผู้จ่าย
+            <select id="entryPayer"></select>
+          </label>
+          <label>
+            ผู้จัดทำ
+            <input id="preparedByInput" type="text" placeholder="ชื่อผู้จัดทำ" />
+          </label>
+          <output id="monthlyStatus">ยังไม่มีข้อมูล</output>
+        </div>
+        <div class="monthly-summary" id="monthlySummary"></div>
+        <div class="table-wrap">
+          <table id="monthlyTable"></table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="matrixView" data-view="matrix">
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>AP Matrix ระหว่างโรงพยาบาล</h2>
+          <span class="badge" id="matrixTotal"></span>
+        </div>
+        <div class="table-wrap matrix-wrap">
+          <table id="matrixTable"></table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="ledgerView" data-view="ledger">
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>ทะเบียนเจ้าหนี้ตามจ่าย</h2>
+          <div class="filters">
+            <label>
+              ค้นหา
+              <input id="ledgerSearch" type="search" placeholder="ผู้จ่าย / เจ้าหนี้" />
+            </label>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="ledgerTable"></table>
+        </div>
+      </section>
+    </section>
+  </main>
+</div>
+
+<template id="loadingTemplate">
+  <div class="empty-state">กำลังโหลดข้อมูล</div>
+</template>

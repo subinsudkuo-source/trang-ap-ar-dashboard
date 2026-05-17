@@ -188,26 +188,32 @@ function renderAll() {
 }
 
 function renderDashboard() {
-  const rows = state.data.trang_comparison;
-  const trangPayable = sum(rows, "trang_payable_to_community");
-  const communityPayable = sum(rows, "community_payable_to_trang");
-  const net = sum(rows, "net_for_trang");
-  const apReviewCount = state.data.reconciliation.filter((row) => Math.abs(row.ap_difference) > 0.01).length;
-  const arDiff = state.data.reconciliation.reduce((acc, row) => acc + Math.abs(row.ar_difference), 0);
+  const selected = getSelectedHospital();
+  const rows = getHospitalComparisonRows(selected);
+  const hospitalPayable = sum(rows, "selected_payable_to_counterparty");
+  const counterpartyPayable = sum(rows, "counterparty_payable_to_selected");
+  const net = sum(rows, "net_for_selected");
+  const reconcile = getSelectedReconciliation(selected);
+  const apNeedsReview = reconcile && Math.abs(reconcile.ap_difference) > 0.01;
+  const arDiff = reconcile ? Math.abs(reconcile.ar_difference) : 0;
+  const apDiff = reconcile ? Math.abs(reconcile.ap_difference) : 0;
 
   document.querySelector("#kpiGrid").innerHTML = [
-    statCard("รพ.ตรังต้องจ่าย รพช.", money(trangPayable), "จากทะเบียนเจ้าหนี้ รพ.ตรัง", "info"),
-    statCard("รพช.ต้องจ่าย รพ.ตรัง", money(communityPayable), "จากทะเบียนเจ้าหนี้ รพช.", "good"),
-    statCard("สุทธิฝั่ง รพ.ตรัง", money(net), net >= 0 ? "รพ.ตรังสุทธิรับ" : "รพ.ตรังสุทธิจ่าย", net >= 0 ? "good" : "danger"),
-    statCard("โรงพยาบาล AP ไม่ตรง TB", `${apReviewCount} แห่ง`, `AR ต่างรวม ${money(arDiff)}`, apReviewCount ? "warn" : "good"),
+    statCard(`${selected} ต้องจ่ายคู่บัญชี`, money(hospitalPayable), `จากทะเบียนเจ้าหนี้ ${selected}`, "info"),
+    statCard(`คู่บัญชีต้องจ่าย ${selected}`, money(counterpartyPayable), "จากทะเบียนเจ้าหนี้ของคู่บัญชี", "good"),
+    statCard(`สุทธิฝั่ง ${selected}`, money(net), net >= 0 ? `${selected} สุทธิรับ` : `${selected} สุทธิจ่าย`, net >= 0 ? "good" : "danger"),
+    statCard(`สถานะงบทดลอง ${selected}`, apNeedsReview ? "ตรวจสอบ" : "OK", `AP ต่าง ${money(apDiff)} · AR ต่าง ${money(arDiff)}`, apNeedsReview ? "warn" : "good"),
   ].join("");
 
-  const netRows = [...rows].sort((a, b) => b.net_for_trang - a.net_for_trang);
+  const chartTitle = document.querySelector("#dashboardView .chart-panel h2");
+  if (chartTitle) chartTitle.textContent = `ยอดสุทธิฝั่ง ${selected}`;
+
+  const netRows = [...rows].sort((a, b) => b.net_for_selected - a.net_for_selected);
   renderBarChart("#netChart", netRows, {
-    labelKey: "community_hospital",
-    valueKey: "net_for_trang",
+    labelKey: "counterparty_hospital",
+    valueKey: "net_for_selected",
     color: "#18796f",
-    maxRows: 9,
+    maxRows: rows.length,
   });
   renderAlertList();
   renderTrangSummaryTable();
@@ -224,7 +230,9 @@ function statCard(label, value, note, tone) {
 }
 
 function renderAlertList() {
+  const selected = getSelectedHospital();
   const rows = state.data.reconciliation
+    .filter((row) => row.hospital === selected)
     .map((row) => ({
       ...row,
       severity: Math.abs(row.ap_difference) > 0.01 ? "AP" : Math.abs(row.ar_difference) > 0.01 ? "AR" : "",
@@ -254,51 +262,61 @@ function renderAlertList() {
 }
 
 function renderTrangSummaryTable() {
+  const selected = getSelectedHospital();
   const rows = sortTrangRows();
-  renderTable("#trangSummaryTable", ["รพช.", "รพ.ตรังต้องจ่าย", "รพช.ต้องจ่าย รพ.ตรัง", "สุทธิฝั่ง รพ.ตรัง", "ทิศทางสุทธิ"], rows, (row) => [
-    row.community_hospital,
-    money(row.trang_payable_to_community),
-    money(row.community_payable_to_trang),
-    money(row.net_for_trang),
-    row.net_for_trang >= 0 ? "รพ.ตรังสุทธิรับ" : "รพ.ตรังสุทธิจ่าย",
+  renderTable("#trangSummaryTable", ["คู่บัญชี", `${selected} ต้องจ่าย`, `คู่บัญชีต้องจ่าย ${selected}`, `สุทธิฝั่ง ${selected}`, "ทิศทางสุทธิ"], rows, (row) => [
+    row.counterparty_hospital,
+    money(row.selected_payable_to_counterparty),
+    money(row.counterparty_payable_to_selected),
+    money(row.net_for_selected),
+    row.net_for_selected >= 0 ? `${selected} สุทธิรับ` : `${selected} สุทธิจ่าย`,
   ], [1, 2, 3]);
 }
 
 function renderTrangView() {
+  const selected = getSelectedHospital();
+  const title = document.querySelector("#trangView h2");
+  if (title) title.textContent = `เปรียบเทียบ ${selected} กับโรงพยาบาลอื่น`;
+  const payButton = document.querySelector('[data-sort="trang"]');
+  const receiveButton = document.querySelector('[data-sort="community"]');
+  if (payButton) payButton.textContent = `${shortHospital(selected)}ต้องจ่าย`;
+  if (receiveButton) receiveButton.textContent = "คู่บัญชีต้องจ่าย";
+
   const rows = sortTrangRows();
   renderBarChart("#trangBars", rows, {
-    labelKey: "community_hospital",
-    valueKey: state.trangSort === "trang" ? "trang_payable_to_community" : state.trangSort === "community" ? "community_payable_to_trang" : "net_for_trang",
+    labelKey: "counterparty_hospital",
+    valueKey: state.trangSort === "trang" ? "selected_payable_to_counterparty" : state.trangSort === "community" ? "counterparty_payable_to_selected" : "net_for_selected",
     color: state.trangSort === "trang" ? "#c7483c" : state.trangSort === "community" ? "#315fa8" : "#18796f",
-    maxRows: 9,
+    maxRows: rows.length,
   });
-  renderTable("#trangCompareTable", ["รพช.", "รพ.ตรังต้องจ่าย", "รพช.ต้องจ่าย รพ.ตรัง", "สุทธิฝั่ง รพ.ตรัง"], rows, (row) => [
-    row.community_hospital,
-    money(row.trang_payable_to_community),
-    money(row.community_payable_to_trang),
-    money(row.net_for_trang),
+  renderTable("#trangCompareTable", ["คู่บัญชี", `${selected} ต้องจ่าย`, `คู่บัญชีต้องจ่าย ${selected}`, `สุทธิฝั่ง ${selected}`], rows, (row) => [
+    row.counterparty_hospital,
+    money(row.selected_payable_to_counterparty),
+    money(row.counterparty_payable_to_selected),
+    money(row.net_for_selected),
   ], [1, 2, 3]);
 }
 
 function sortTrangRows() {
-  const rows = [...state.data.trang_comparison];
+  const rows = getHospitalComparisonRows();
   const sortKey =
     state.trangSort === "trang"
-      ? "trang_payable_to_community"
+      ? "selected_payable_to_counterparty"
       : state.trangSort === "community"
-        ? "community_payable_to_trang"
-        : "net_for_trang";
+        ? "counterparty_payable_to_selected"
+        : "net_for_selected";
   return rows.sort((a, b) => b[sortKey] - a[sortKey]);
 }
 
 function renderReconcile() {
+  const selected = getSelectedHospital();
   const status = document.querySelector("#reconcileStatus").value;
   const query = document.querySelector("#reconcileSearch").value.trim().toLowerCase();
   const rows = state.data.reconciliation.filter((row) => {
     const needsReview = Math.abs(row.ap_difference) > 0.01;
     const statusMatch = status === "all" || (status === "review" && needsReview) || (status === "ok" && !needsReview);
     const queryMatch = !query || row.hospital.toLowerCase().includes(query);
-    return statusMatch && queryMatch;
+    return row.hospital === selected && statusMatch && queryMatch;
   });
 
   renderTable(
@@ -516,14 +534,16 @@ function lastSavedText(period, payer) {
 }
 
 function renderMatrix() {
+  const selected = getSelectedHospital();
   const hospitals = state.data.hospitals;
+  const payerRows = [selected];
   const matrix = state.data.matrix;
-  const max = Math.max(...hospitals.flatMap((payer) => hospitals.map((creditor) => matrix[payer]?.[creditor] || 0)));
-  const total = hospitals.reduce((acc, payer) => acc + hospitals.reduce((sumRow, creditor) => sumRow + (matrix[payer]?.[creditor] || 0), 0), 0);
+  const max = Math.max(...payerRows.flatMap((payer) => hospitals.map((creditor) => matrix[payer]?.[creditor] || 0)), 1);
+  const total = payerRows.reduce((acc, payer) => acc + hospitals.reduce((sumRow, creditor) => sumRow + (matrix[payer]?.[creditor] || 0), 0), 0);
   document.querySelector("#matrixTotal").textContent = money(total);
 
   const header = `<tr><th>ผู้จ่าย \\ เจ้าหนี้</th>${hospitals.map((hospital) => `<th class="num">${escapeHtml(shortHospital(hospital))}</th>`).join("")}</tr>`;
-  const body = hospitals
+  const body = payerRows
     .map((payer) => {
       const cells = hospitals
         .map((creditor) => {
@@ -540,9 +560,12 @@ function renderMatrix() {
 }
 
 function renderLedger() {
+  const selected = getSelectedHospital();
   const query = document.querySelector("#ledgerSearch").value.trim().toLowerCase();
   const rows = state.data.ledger_rows.filter((row) => {
-    return !query || row.payer_hospital.toLowerCase().includes(query) || row.creditor_hospital.toLowerCase().includes(query);
+    const hospitalMatch = row.payer_hospital === selected;
+    const queryMatch = !query || row.payer_hospital.toLowerCase().includes(query) || row.creditor_hospital.toLowerCase().includes(query);
+    return hospitalMatch && queryMatch;
   });
 
   renderTable(
@@ -614,18 +637,43 @@ function renderTable(selector, headers, rows, mapRow, numericIndexes = [], rawIn
   document.querySelector(selector).innerHTML = `<thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody>`;
 }
 
+function getSelectedHospital() {
+  return state.selectedHospital || state.data.hospitals[0];
+}
+
+function getSelectedReconciliation(hospital = getSelectedHospital()) {
+  return state.data.reconciliation.find((row) => row.hospital === hospital);
+}
+
+function getHospitalComparisonRows(hospital = getSelectedHospital()) {
+  const matrix = state.data.matrix || {};
+  return state.data.hospitals
+    .filter((counterparty) => counterparty !== hospital)
+    .map((counterparty) => {
+      const selectedPayable = matrix[hospital]?.[counterparty] || 0;
+      const counterpartyPayable = matrix[counterparty]?.[hospital] || 0;
+      return {
+        counterparty_hospital: counterparty,
+        selected_payable_to_counterparty: selectedPayable,
+        counterparty_payable_to_selected: counterpartyPayable,
+        net_for_selected: counterpartyPayable - selectedPayable,
+      };
+    });
+}
+
 function exportTrangCsv() {
+  const selected = getSelectedHospital();
   const rows = sortTrangRows();
-  const csvRows = [["รพช.", "รพ.ตรังต้องจ่าย", "รพช.ต้องจ่าย รพ.ตรัง", "สุทธิฝั่ง รพ.ตรัง"]];
+  const csvRows = [["คู่บัญชี", `${selected} ต้องจ่าย`, `คู่บัญชีต้องจ่าย ${selected}`, `สุทธิฝั่ง ${selected}`]];
   rows.forEach((row) => {
     csvRows.push([
-      row.community_hospital,
-      row.trang_payable_to_community,
-      row.community_payable_to_trang,
-      row.net_for_trang,
+      row.counterparty_hospital,
+      row.selected_payable_to_counterparty,
+      row.counterparty_payable_to_selected,
+      row.net_for_selected,
     ]);
   });
-  downloadText("trang-community-comparison.csv", toCsv(csvRows), "text/csv;charset=utf-8");
+  downloadText(`${slug(selected)}-counterparty-comparison.csv`, toCsv(csvRows), "text/csv;charset=utf-8");
 }
 
 function exportMonthlyCsv() {

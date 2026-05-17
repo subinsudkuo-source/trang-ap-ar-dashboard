@@ -8,22 +8,21 @@
 - `Index.html`
 - `WebAppBody.html`
 - `Styles.html`
-- `Client.html` สร้างจาก `node build_apps_script_bundle.mjs`
+- `Client.html`
 - `appsscript.json`
 
 ## Deploy
 
 1. เปิด Google Sheet ฐานข้อมูลกลางของคุณ
 2. ไปที่ Extensions > Apps Script
-3. รัน `node build_apps_script_bundle.mjs` จากโฟลเดอร์หลัก เพื่อสร้าง `Client.html`
-4. วางไฟล์จากโฟลเดอร์นี้
-5. ตั้งค่า Script Properties:
+3. วางไฟล์จากโฟลเดอร์นี้
+4. ตั้งค่า Script Properties:
    - key: `SPREADSHEET_ID`
    - value: Google Sheet ID
-6. รัน `setupDatabase` หนึ่งครั้งและอนุญาตสิทธิ์
-7. Deploy > New deployment > Web app
-8. ตั้งค่า Execute as: Me และ Who has access: ตามนโยบายหน่วยงาน
-9. ใช้ URL ที่ได้เป็น Web App หลัก
+5. รัน `setupDatabase` หนึ่งครั้งและอนุญาตสิทธิ์
+6. Deploy > New deployment > Web app
+7. ตั้งค่า Execute as: Me และ Who has access: ตามนโยบายหน่วยงาน
+8. ใช้ URL ที่ได้เป็น Web App หลัก
 
 ## ใช้กับหน้า local
 

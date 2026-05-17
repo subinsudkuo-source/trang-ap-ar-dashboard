@@ -9,7 +9,7 @@ const outputsDir = join(root, "outputs");
 mkdirSync(outputsDir, { recursive: true });
 
 const css = readFileSync(join(root, "webapp", "styles.css"), "utf8");
-const data = readFileSync(join(root, "webapp", "data.js"), "utf8");
+const data = readFileSync(join(root, "webapp", "data.example.js"), "utf8");
 const app = readFileSync(join(root, "webapp", "app.js"), "utf8");
 
 writeFileSync(join(appsScriptDir, "Styles.html"), `<style>\n${css}\n</style>\n`);

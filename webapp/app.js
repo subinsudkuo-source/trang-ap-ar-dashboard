@@ -1,11 +1,13 @@
 const DATA_URL = "./dashboard_data.json";
 const STORAGE_KEY = "trang-ap-ar-dashboard-monthly-v1";
 const BACKEND_URL_KEY = "trang-ap-ar-dashboard-backend-url";
+const ALL_HOSPITALS_VALUE = "";
+const ALL_HOSPITALS_LABEL = "ทั้งจังหวัด";
 
 const state = {
   data: null,
   view: "dashboard",
-  selectedHospital: "รพ.ตรัง",
+  selectedHospital: ALL_HOSPITALS_VALUE,
   trangSort: "net",
   monthly: loadMonthly(),
   backendUrl: localStorage.getItem(BACKEND_URL_KEY) || "",
@@ -51,7 +53,7 @@ async function init() {
       hydrateMonthlyRecords(window.APPS_SCRIPT_BOOTSTRAP.monthlyEntries.records);
       state.userEmail = window.APPS_SCRIPT_BOOTSTRAP.userEmail || "";
     }
-    state.selectedHospital = state.data.hospitals[0];
+    state.selectedHospital = ALL_HOSPITALS_VALUE;
     setupControls();
     renderAll();
   } catch (error) {
@@ -79,9 +81,9 @@ function showLoading() {
 
 function setupControls() {
   fillSelect("#periodSelect", [state.data.period, ...monthOptions.filter((m) => m !== state.data.period)], state.data.period);
-  fillSelect("#hospitalSelect", state.data.hospitals, state.selectedHospital);
+  fillSelect("#hospitalSelect", [ALL_HOSPITALS_VALUE, ...state.data.hospitals], state.selectedHospital);
   fillSelect("#entryPeriod", monthOptions, "พฤษภาคม 2569");
-  fillSelect("#entryPayer", state.data.hospitals, state.selectedHospital);
+  fillSelect("#entryPayer", state.data.hospitals, state.data.hospitals[0]);
 
   document.querySelector("#sourceLine").textContent =
     `แหล่งข้อมูล: ทะเบียนเจ้าหนี้ตามจ่าย + งบทดลอง สิ้น ${state.data.period}`;
@@ -90,7 +92,9 @@ function setupControls() {
   document.querySelector("#periodSelect").addEventListener("change", renderAll);
   document.querySelector("#hospitalSelect").addEventListener("change", (event) => {
     state.selectedHospital = event.target.value;
-    document.querySelector("#entryPayer").value = state.selectedHospital;
+    if (!isAllHospitals()) {
+      document.querySelector("#entryPayer").value = state.selectedHospital;
+    }
     renderAll();
   });
 
@@ -162,7 +166,7 @@ function updateBackendStatus(message) {
 function fillSelect(selector, values, selected) {
   const select = document.querySelector(selector);
   select.innerHTML = values
-    .map((value) => `<option value="${escapeHtml(value)}"${value === selected ? " selected" : ""}>${escapeHtml(value)}</option>`)
+    .map((value) => `<option value="${escapeHtml(value)}"${value === selected ? " selected" : ""}>${escapeHtml(value || ALL_HOSPITALS_LABEL)}</option>`)
     .join("");
 }
 
@@ -189,24 +193,33 @@ function renderAll() {
 
 function renderDashboard() {
   const selected = getSelectedHospital();
+  const selectedLabel = getSelectedHospitalLabel();
   const rows = getHospitalComparisonRows(selected);
-  const hospitalPayable = sum(rows, "selected_payable_to_counterparty");
-  const counterpartyPayable = sum(rows, "counterparty_payable_to_selected");
-  const net = sum(rows, "net_for_selected");
-  const reconcile = getSelectedReconciliation(selected);
+  const hospitalPayable = isAllHospitals()
+    ? sum(state.data.reconciliation, "ap_ledger_total")
+    : sum(rows, "selected_payable_to_counterparty");
+  const counterpartyPayable = isAllHospitals()
+    ? sum(state.data.reconciliation, "ar_from_counterparties")
+    : sum(rows, "counterparty_payable_to_selected");
+  const net = isAllHospitals()
+    ? sum(state.data.reconciliation, "ap_difference")
+    : sum(rows, "net_for_selected");
+  const reconcile = isAllHospitals() ? null : getSelectedReconciliation(selected);
+  const apReviewCount = state.data.reconciliation.filter((row) => Math.abs(row.ap_difference) > 0.01).length;
+  const arReviewCount = state.data.reconciliation.filter((row) => Math.abs(row.ar_difference) > 0.01).length;
   const apNeedsReview = reconcile && Math.abs(reconcile.ap_difference) > 0.01;
-  const arDiff = reconcile ? Math.abs(reconcile.ar_difference) : 0;
-  const apDiff = reconcile ? Math.abs(reconcile.ap_difference) : 0;
+  const arDiff = reconcile ? Math.abs(reconcile.ar_difference) : state.data.reconciliation.reduce((acc, row) => acc + Math.abs(row.ar_difference), 0);
+  const apDiff = reconcile ? Math.abs(reconcile.ap_difference) : state.data.reconciliation.reduce((acc, row) => acc + Math.abs(row.ap_difference), 0);
 
   document.querySelector("#kpiGrid").innerHTML = [
-    statCard(`${selected} ต้องจ่ายคู่บัญชี`, money(hospitalPayable), `จากทะเบียนเจ้าหนี้ ${selected}`, "info"),
-    statCard(`คู่บัญชีต้องจ่าย ${selected}`, money(counterpartyPayable), "จากทะเบียนเจ้าหนี้ของคู่บัญชี", "good"),
-    statCard(`สุทธิฝั่ง ${selected}`, money(net), net >= 0 ? `${selected} สุทธิรับ` : `${selected} สุทธิจ่าย`, net >= 0 ? "good" : "danger"),
-    statCard(`สถานะงบทดลอง ${selected}`, apNeedsReview ? "ตรวจสอบ" : "OK", `AP ต่าง ${money(apDiff)} · AR ต่าง ${money(arDiff)}`, apNeedsReview ? "warn" : "good"),
+    statCard(isAllHospitals() ? "เจ้าหนี้รวมทั้งจังหวัด" : `${selectedLabel} ต้องจ่ายคู่บัญชี`, money(hospitalPayable), isAllHospitals() ? "รวมจากทะเบียนเจ้าหนี้ทุกโรงพยาบาล" : `จากทะเบียนเจ้าหนี้ ${selectedLabel}`, "info"),
+    statCard(isAllHospitals() ? "ลูกหนี้จากคู่บัญชีรวม" : `คู่บัญชีต้องจ่าย ${selectedLabel}`, money(counterpartyPayable), "จากทะเบียนเจ้าหนี้ของคู่บัญชี", "good"),
+    statCard(isAllHospitals() ? "ผลต่าง AP รวม" : `สุทธิฝั่ง ${selectedLabel}`, money(net), isAllHospitals() ? `AP ต่างรวม ${money(apDiff)}` : net >= 0 ? `${selectedLabel} สุทธิรับ` : `${selectedLabel} สุทธิจ่าย`, net >= 0 ? "good" : "danger"),
+    statCard(isAllHospitals() ? "รายการต้องตรวจสอบ" : `สถานะงบทดลอง ${selectedLabel}`, isAllHospitals() ? `${apReviewCount + arReviewCount} รายการ` : apNeedsReview ? "ตรวจสอบ" : "OK", `AP ต่าง ${money(apDiff)} · AR ต่าง ${money(arDiff)}`, isAllHospitals() ? apReviewCount + arReviewCount ? "warn" : "good" : apNeedsReview ? "warn" : "good"),
   ].join("");
 
   const chartTitle = document.querySelector("#dashboardView .chart-panel h2");
-  if (chartTitle) chartTitle.textContent = `ยอดสุทธิฝั่ง ${selected}`;
+  if (chartTitle) chartTitle.textContent = isAllHospitals() ? "ยอดสุทธิรายโรงพยาบาล" : `ยอดสุทธิฝั่ง ${selectedLabel}`;
 
   const netRows = [...rows].sort((a, b) => b.net_for_selected - a.net_for_selected);
   renderBarChart("#netChart", netRows, {
@@ -232,7 +245,7 @@ function statCard(label, value, note, tone) {
 function renderAlertList() {
   const selected = getSelectedHospital();
   const rows = state.data.reconciliation
-    .filter((row) => row.hospital === selected)
+    .filter((row) => isAllHospitals() || row.hospital === selected)
     .map((row) => ({
       ...row,
       severity: Math.abs(row.ap_difference) > 0.01 ? "AP" : Math.abs(row.ar_difference) > 0.01 ? "AR" : "",
@@ -263,24 +276,26 @@ function renderAlertList() {
 
 function renderTrangSummaryTable() {
   const selected = getSelectedHospital();
+  const selectedLabel = getSelectedHospitalLabel();
   const rows = sortTrangRows();
-  renderTable("#trangSummaryTable", ["คู่บัญชี", `${selected} ต้องจ่าย`, `คู่บัญชีต้องจ่าย ${selected}`, `สุทธิฝั่ง ${selected}`, "ทิศทางสุทธิ"], rows, (row) => [
+  renderTable("#trangSummaryTable", [isAllHospitals() ? "โรงพยาบาล" : "คู่บัญชี", isAllHospitals() ? "เจ้าหนี้รวม" : `${selectedLabel} ต้องจ่าย`, isAllHospitals() ? "ลูกหนี้จากคู่บัญชี" : `คู่บัญชีต้องจ่าย ${selectedLabel}`, isAllHospitals() ? "สุทธิ" : `สุทธิฝั่ง ${selectedLabel}`, "ทิศทางสุทธิ"], rows, (row) => [
     row.counterparty_hospital,
     money(row.selected_payable_to_counterparty),
     money(row.counterparty_payable_to_selected),
     money(row.net_for_selected),
-    row.net_for_selected >= 0 ? `${selected} สุทธิรับ` : `${selected} สุทธิจ่าย`,
+    row.net_for_selected >= 0 ? `${row.counterparty_hospital} สุทธิรับ` : `${row.counterparty_hospital} สุทธิจ่าย`,
   ], [1, 2, 3]);
 }
 
 function renderTrangView() {
   const selected = getSelectedHospital();
+  const selectedLabel = getSelectedHospitalLabel();
   const title = document.querySelector("#trangView h2");
-  if (title) title.textContent = `เปรียบเทียบ ${selected} กับโรงพยาบาลอื่น`;
+  if (title) title.textContent = isAllHospitals() ? "ภาพรวมสุทธิรายโรงพยาบาลทั้งจังหวัด" : `เปรียบเทียบ ${selectedLabel} กับโรงพยาบาลอื่น`;
   const payButton = document.querySelector('[data-sort="trang"]');
   const receiveButton = document.querySelector('[data-sort="community"]');
-  if (payButton) payButton.textContent = `${shortHospital(selected)}ต้องจ่าย`;
-  if (receiveButton) receiveButton.textContent = "คู่บัญชีต้องจ่าย";
+  if (payButton) payButton.textContent = isAllHospitals() ? "เจ้าหนี้รวม" : `${shortHospital(selectedLabel)}ต้องจ่าย`;
+  if (receiveButton) receiveButton.textContent = isAllHospitals() ? "ลูกหนี้รวม" : "คู่บัญชีต้องจ่าย";
 
   const rows = sortTrangRows();
   renderBarChart("#trangBars", rows, {
@@ -289,7 +304,7 @@ function renderTrangView() {
     color: state.trangSort === "trang" ? "#c7483c" : state.trangSort === "community" ? "#315fa8" : "#18796f",
     maxRows: rows.length,
   });
-  renderTable("#trangCompareTable", ["คู่บัญชี", `${selected} ต้องจ่าย`, `คู่บัญชีต้องจ่าย ${selected}`, `สุทธิฝั่ง ${selected}`], rows, (row) => [
+  renderTable("#trangCompareTable", [isAllHospitals() ? "โรงพยาบาล" : "คู่บัญชี", isAllHospitals() ? "เจ้าหนี้รวม" : `${selectedLabel} ต้องจ่าย`, isAllHospitals() ? "ลูกหนี้จากคู่บัญชี" : `คู่บัญชีต้องจ่าย ${selectedLabel}`, isAllHospitals() ? "สุทธิ" : `สุทธิฝั่ง ${selectedLabel}`], rows, (row) => [
     row.counterparty_hospital,
     money(row.selected_payable_to_counterparty),
     money(row.counterparty_payable_to_selected),
@@ -316,7 +331,7 @@ function renderReconcile() {
     const needsReview = Math.abs(row.ap_difference) > 0.01;
     const statusMatch = status === "all" || (status === "review" && needsReview) || (status === "ok" && !needsReview);
     const queryMatch = !query || row.hospital.toLowerCase().includes(query);
-    return row.hospital === selected && statusMatch && queryMatch;
+    return (isAllHospitals() || row.hospital === selected) && statusMatch && queryMatch;
   });
 
   renderTable(
@@ -536,7 +551,7 @@ function lastSavedText(period, payer) {
 function renderMatrix() {
   const selected = getSelectedHospital();
   const hospitals = state.data.hospitals;
-  const payerRows = [selected];
+  const payerRows = isAllHospitals() ? hospitals : [selected];
   const matrix = state.data.matrix;
   const max = Math.max(...payerRows.flatMap((payer) => hospitals.map((creditor) => matrix[payer]?.[creditor] || 0)), 1);
   const total = payerRows.reduce((acc, payer) => acc + hospitals.reduce((sumRow, creditor) => sumRow + (matrix[payer]?.[creditor] || 0), 0), 0);
@@ -563,7 +578,7 @@ function renderLedger() {
   const selected = getSelectedHospital();
   const query = document.querySelector("#ledgerSearch").value.trim().toLowerCase();
   const rows = state.data.ledger_rows.filter((row) => {
-    const hospitalMatch = row.payer_hospital === selected;
+    const hospitalMatch = isAllHospitals() || row.payer_hospital === selected;
     const queryMatch = !query || row.payer_hospital.toLowerCase().includes(query) || row.creditor_hospital.toLowerCase().includes(query);
     return hospitalMatch && queryMatch;
   });
@@ -638,15 +653,40 @@ function renderTable(selector, headers, rows, mapRow, numericIndexes = [], rawIn
 }
 
 function getSelectedHospital() {
-  return state.selectedHospital || state.data.hospitals[0];
+  return state.selectedHospital;
+}
+
+function getSelectedHospitalLabel() {
+  return isAllHospitals() ? ALL_HOSPITALS_LABEL : getSelectedHospital();
+}
+
+function isAllHospitals() {
+  return !state.selectedHospital;
 }
 
 function getSelectedReconciliation(hospital = getSelectedHospital()) {
+  if (isAllHospitals()) return null;
   return state.data.reconciliation.find((row) => row.hospital === hospital);
 }
 
 function getHospitalComparisonRows(hospital = getSelectedHospital()) {
   const matrix = state.data.matrix || {};
+  if (isAllHospitals()) {
+    return state.data.hospitals.map((targetHospital) => {
+      const selectedPayable = state.data.hospitals.reduce((acc, creditor) => {
+        return creditor === targetHospital ? acc : acc + (matrix[targetHospital]?.[creditor] || 0);
+      }, 0);
+      const counterpartyPayable = state.data.hospitals.reduce((acc, payer) => {
+        return payer === targetHospital ? acc : acc + (matrix[payer]?.[targetHospital] || 0);
+      }, 0);
+      return {
+        counterparty_hospital: targetHospital,
+        selected_payable_to_counterparty: selectedPayable,
+        counterparty_payable_to_selected: counterpartyPayable,
+        net_for_selected: counterpartyPayable - selectedPayable,
+      };
+    });
+  }
   return state.data.hospitals
     .filter((counterparty) => counterparty !== hospital)
     .map((counterparty) => {
@@ -663,8 +703,9 @@ function getHospitalComparisonRows(hospital = getSelectedHospital()) {
 
 function exportTrangCsv() {
   const selected = getSelectedHospital();
+  const selectedLabel = getSelectedHospitalLabel();
   const rows = sortTrangRows();
-  const csvRows = [["คู่บัญชี", `${selected} ต้องจ่าย`, `คู่บัญชีต้องจ่าย ${selected}`, `สุทธิฝั่ง ${selected}`]];
+  const csvRows = [[isAllHospitals() ? "โรงพยาบาล" : "คู่บัญชี", isAllHospitals() ? "เจ้าหนี้รวม" : `${selectedLabel} ต้องจ่าย`, isAllHospitals() ? "ลูกหนี้จากคู่บัญชี" : `คู่บัญชีต้องจ่าย ${selectedLabel}`, isAllHospitals() ? "สุทธิ" : `สุทธิฝั่ง ${selectedLabel}`]];
   rows.forEach((row) => {
     csvRows.push([
       row.counterparty_hospital,
@@ -673,7 +714,7 @@ function exportTrangCsv() {
       row.net_for_selected,
     ]);
   });
-  downloadText(`${slug(selected)}-counterparty-comparison.csv`, toCsv(csvRows), "text/csv;charset=utf-8");
+  downloadText(`${slug(selectedLabel)}-counterparty-comparison.csv`, toCsv(csvRows), "text/csv;charset=utf-8");
 }
 
 function exportMonthlyCsv() {

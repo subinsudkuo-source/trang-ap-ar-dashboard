@@ -3,6 +3,10 @@ const SHEETS = {
   monthlyEntries: 'MonthlyEntries',
   auditLog: 'AuditLog',
   appConfig: 'AppConfig',
+  apInput: 'AP_Input',
+  apMatrix: 'AP_Matrix',
+  reconcile: 'Reconcile',
+  trangCompare: 'Trang_Compare',
 };
 
 const MONTHLY_HEADERS = [
@@ -117,8 +121,120 @@ function getBootstrapData() {
     spreadsheetId: getSpreadsheetId_(),
     userEmail: getUserEmail_(),
     hospitals: HOSPITALS,
+    dashboardData: getDashboardData_(),
     monthlyEntries: listMonthlyEntries({}),
   };
+}
+
+function getDashboardData_() {
+  const ss = SpreadsheetApp.openById(getSpreadsheetId_());
+  const matrixData = readMatrix_(ss);
+  const hospitals = matrixData.hospitals.length ? matrixData.hospitals : HOSPITALS;
+  const period = matrixData.period || readPeriodFromApInput_(ss) || 'เมษายน 2569';
+
+  return {
+    period,
+    hospitals,
+    ledger_rows: readApInputRows_(ss, period),
+    matrix: matrixData.matrix,
+    trial_balance_rows: [],
+    trial_balance_target_rows: [],
+    reconciliation: readReconciliationRows_(ss),
+    trang_comparison: readTrangComparisonRows_(ss),
+  };
+}
+
+function readPeriodFromApInput_(ss) {
+  const sheet = ss.getSheetByName(SHEETS.apInput);
+  if (!sheet || sheet.getLastRow() < 2) return '';
+  return String(sheet.getRange(2, 1).getDisplayValue() || '');
+}
+
+function readApInputRows_(ss, defaultPeriod) {
+  const rows = readTableObjects_(ss, SHEETS.apInput);
+  return rows
+    .filter((row) => row['Payer Hospital'] && row['Creditor Hospital'])
+    .map((row) => ({
+      period: row.Period || defaultPeriod,
+      payer_hospital: row['Payer Hospital'],
+      creditor_hospital: row['Creditor Hospital'],
+      source_file: row['Source File'] || '',
+      'เจ้าหนี้ปีงบ ......': parseAmount_(row['FY 2561-2565 / Prior']),
+      'เจ้าหนี้ปีงบ 2566': parseAmount_(row['FY 2566']),
+      'เจ้าหนี้ปีงบ 2567': parseAmount_(row['FY 2567']),
+      'เจ้าหนี้ปีงบ 2568': parseAmount_(row['FY 2568']),
+      'ต.ค.2568': parseAmount_(row['Oct 2568']),
+      'พ.ย.2568': parseAmount_(row['Nov 2568']),
+      'ธ.ค.2568': parseAmount_(row['Dec 2568']),
+      'ม.ค.2569': parseAmount_(row['Jan 2569']),
+      'ก.พ.2569': parseAmount_(row['Feb 2569']),
+      'มี.ค.2569': parseAmount_(row['Mar 2569']),
+      'เม.ย.2569': parseAmount_(row['Apr 2569']),
+      'รวมเป็นเงิน': parseAmount_(row['Amount Total']),
+      amount_total: parseAmount_(row['Amount Total']),
+    }));
+}
+
+function readReconciliationRows_(ss) {
+  return readTableObjects_(ss, SHEETS.reconcile)
+    .filter((row) => row.Hospital)
+    .map((row) => ({
+      hospital: row.Hospital,
+      ap_ledger_total: parseAmount_(row['AP Register Total']),
+      ap_trial_balance: parseAmount_(row['AP Trial Balance 2101020199.202']),
+      ap_difference: parseAmount_(row['AP Difference']),
+      ar_from_counterparties: parseAmount_(row['AR by Counterparty AP']),
+      ar_trial_balance: parseAmount_(row['AR Trial Balance 1102050101.203']),
+      ar_difference: parseAmount_(row['AR Difference']),
+    }));
+}
+
+function readTrangComparisonRows_(ss) {
+  return readTableObjects_(ss, SHEETS.trangCompare)
+    .filter((row) => row['Community Hospital'])
+    .map((row) => ({
+      community_hospital: row['Community Hospital'],
+      trang_payable_to_community: parseAmount_(row['Trang AP to Community']),
+      community_payable_to_trang: parseAmount_(row['Community AP to Trang']),
+      net_for_trang: parseAmount_(row['Net for Trang']),
+    }));
+}
+
+function readMatrix_(ss) {
+  const sheet = ss.getSheetByName(SHEETS.apMatrix);
+  if (!sheet || sheet.getLastRow() < 4) {
+    return { period: '', hospitals: HOSPITALS, matrix: {} };
+  }
+
+  const values = sheet.getDataRange().getDisplayValues();
+  const period = values[0] && values[0][1] ? String(values[0][1]) : '';
+  const headerRow = values[2] || [];
+  const hospitals = headerRow.slice(1).filter(Boolean);
+  const matrix = {};
+
+  values.slice(3).forEach((row) => {
+    const payer = row[0];
+    if (!payer) return;
+    matrix[payer] = {};
+    hospitals.forEach((creditor, index) => {
+      matrix[payer][creditor] = parseAmount_(row[index + 1]);
+    });
+  });
+
+  return { period, hospitals, matrix };
+}
+
+function readTableObjects_(ss, sheetName) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet || sheet.getLastRow() < 1) return [];
+  const values = sheet.getDataRange().getDisplayValues();
+  const headers = values[0].map((header) => String(header || '').trim());
+  return values.slice(1).map((row) => {
+    return headers.reduce((record, header, index) => {
+      if (header) record[header] = row[index];
+      return record;
+    }, {});
+  });
 }
 
 function listMonthlyEntries(filter) {
@@ -299,6 +415,17 @@ function requireValue_(value, fieldName) {
     throw new Error(`Missing required field: ${fieldName}`);
   }
   return String(value).trim();
+}
+
+function parseAmount_(value) {
+  if (value === undefined || value === null || value === '' || value === '-') return 0;
+  if (typeof value === 'number') return value;
+  const raw = String(value).trim();
+  const negative = raw.startsWith('(') && raw.endsWith(')');
+  const cleaned = raw.replace(/[(),]/g, '').replace(/[^\d.-]/g, '');
+  const number = Number(cleaned || 0);
+  if (!Number.isFinite(number)) return 0;
+  return negative ? -Math.abs(number) : number;
 }
 
 function jsonOutput(result) {

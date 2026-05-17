@@ -1,0 +1,10 @@
+{
+  "name": "trang-ap-ar-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:apps-script": "node build_apps_script_bundle.mjs",
+    "start": "python3 -m http.server 4174 --directory webapp"
+  }
+}

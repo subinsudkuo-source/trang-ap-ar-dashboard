@@ -48,11 +48,13 @@ document.addEventListener("DOMContentLoaded", init);
 async function init() {
   showLoading();
   try {
-    state.data = window.DASHBOARD_DATA || (await fetchDashboardData());
-    if (window.APPS_SCRIPT_BOOTSTRAP?.monthlyEntries?.records) {
-      hydrateMonthlyRecords(window.APPS_SCRIPT_BOOTSTRAP.monthlyEntries.records);
-      state.userEmail = window.APPS_SCRIPT_BOOTSTRAP.userEmail || "";
+    await loadRuntimeConfig();
+    const bootstrap = await loadBootstrapData();
+    state.data = bootstrap?.dashboardData || window.DASHBOARD_DATA || (await fetchDashboardData());
+    if (bootstrap?.monthlyEntries?.records) {
+      hydrateMonthlyRecords(bootstrap.monthlyEntries.records);
     }
+    state.userEmail = bootstrap?.userEmail || window.APPS_SCRIPT_BOOTSTRAP?.userEmail || "";
     state.selectedHospital = ALL_HOSPITALS_VALUE;
     setupControls();
     renderAll();
@@ -62,6 +64,41 @@ async function init() {
         โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(error.message)}
       </div>
     `;
+  }
+}
+
+async function loadRuntimeConfig() {
+  if (window.APP_CONFIG?.appsScriptUrl && !state.backendUrl) {
+    state.backendUrl = window.APP_CONFIG.appsScriptUrl;
+    localStorage.setItem(BACKEND_URL_KEY, state.backendUrl);
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/config");
+    if (!response.ok) return;
+    const config = await response.json();
+    if (config.appsScriptUrl && !state.backendUrl) {
+      state.backendUrl = config.appsScriptUrl;
+      localStorage.setItem(BACKEND_URL_KEY, state.backendUrl);
+    }
+  } catch {
+    // file:// and plain static hosting may not have /api/config.
+  }
+}
+
+async function loadBootstrapData() {
+  if (window.APPS_SCRIPT_BOOTSTRAP?.dashboardData) {
+    return window.APPS_SCRIPT_BOOTSTRAP;
+  }
+  if (!state.backendUrl) {
+    return window.APPS_SCRIPT_BOOTSTRAP || null;
+  }
+  try {
+    const result = await backendBootstrap();
+    return result?.ok ? result : null;
+  } catch {
+    return window.APPS_SCRIPT_BOOTSTRAP || null;
   }
 }
 
@@ -751,6 +788,15 @@ function backendListMonthlyEntries(period, payerHospital) {
     action: "listMonthlyEntries",
     period,
     payerHospital,
+  });
+}
+
+function backendBootstrap() {
+  if (isAppsScriptRuntime()) {
+    return googleRun("getBootstrapData");
+  }
+  return jsonp(state.backendUrl, {
+    action: "bootstrap",
   });
 }
 

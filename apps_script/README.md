@@ -48,3 +48,7 @@ node build_apps_script_bundle.mjs
 - `MonthlyEntries`: เก็บยอดรายเดือนรายคู่บัญชี
 - `AuditLog`: เก็บประวัติการบันทึก
 - `AppConfig`: เก็บค่าระบบและรายชื่อโรงพยาบาล
+- `AP_Input`: ทะเบียนเจ้าหนี้ตามจ่าย
+- `AP_Matrix`: matrix ผู้จ่าย/เจ้าหนี้
+- `Reconcile`: ผลตรวจทะเบียนเจ้าหนี้กับงบทดลอง
+- `Trang_Compare`: ตารางเปรียบเทียบ รพ.ตรัง กับ รพช.

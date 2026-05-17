@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/webapp/index.html"
+    },
+    {
+      "source": "/app.js",
+      "destination": "/webapp/app.js"
+    },
+    {
+      "source": "/styles.css",
+      "destination": "/webapp/styles.css"
+    },
+    {
+      "source": "/data.js",
+      "destination": "/webapp/data.example.js"
+    },
+    {
+      "source": "/data.example.js",
+      "destination": "/webapp/data.example.js"
+    }
+  ]
+}

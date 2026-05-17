@@ -15,10 +15,12 @@
 
 ```text
 webapp/                 Static web app
+api/                    Vercel serverless runtime config
 apps_script/            Google Apps Script backend and Web App files
 extract_dashboard_data.py
 build_dashboard.mjs
 build_apps_script_bundle.mjs
+vercel.json
 ```
 
 ## Sensitive Data
@@ -31,7 +33,7 @@ build_apps_script_bundle.mjs
 cp webapp/data.example.js webapp/data.js
 ```
 
-เมื่อใช้งานจริง ให้สร้าง `webapp/data.js` จากข้อมูลที่อนุญาตให้ใช้ในเครื่องหรือ deploy ผ่าน Apps Script ที่เชื่อม Google Sheet กลาง
+เมื่อใช้งานจริงบน Vercel ไม่ต้อง commit `webapp/data.js` เพราะเว็บจะโหลดข้อมูลจาก Apps Script ผ่าน Google Sheet กลาง
 
 ## Run Locally
 
@@ -51,13 +53,49 @@ http://127.0.0.1:4174/
 
 1. เปิด Google Sheet ฐานข้อมูลกลาง
 2. ไปที่ `Extensions > Apps Script`
-3. วางไฟล์จาก `apps_script/`
-4. ตั้งค่า Spreadsheet ID ใน `Script Properties`:
+3. รัน `node build_apps_script_bundle.mjs` เพื่อ sync frontend เข้า `apps_script/Client.html`
+4. วางไฟล์จาก `apps_script/`
+5. ตั้งค่า Spreadsheet ID ใน `Script Properties`:
    - key: `SPREADSHEET_ID`
    - value: Google Sheet ID
-5. รัน `setupDatabase`
-6. Deploy > New deployment > Web app
-7. นำ Web App URL ไปใช้ในหน้าเว็บ local หรือใช้ Web App เป็นระบบหลัก
+6. รัน `setupDatabase`
+7. Deploy > New deployment > Web app
+8. Copy Web App URL ที่ได้
+
+Apps Script จะอ่านข้อมูล Dashboard จากแท็บใน Google Sheet:
+
+- `AP_Input`
+- `AP_Matrix`
+- `Reconcile`
+- `Trang_Compare`
+- `MonthlyEntries`
+
+## Vercel Deployment
+
+1. Push repo นี้ขึ้น GitHub
+2. เปิด Vercel แล้วเลือก `Add New Project`
+3. Import repo `subinsudkuo-source/trang-ap-ar-dashboard`
+4. ตั้งค่า Environment Variable:
+   - key: `APPS_SCRIPT_WEB_APP_URL`
+   - value: URL จาก Apps Script Web App
+5. Deploy
+
+หลัง deploy แล้ว Vercel จะเปิดหน้าเว็บจาก `webapp/index.html` และ `/api/config` จะส่ง Apps Script URL ให้ frontend อัตโนมัติ
+
+## GitHub Upload
+
+ถ้า GitHub repo มี README อยู่แล้วและ history คนละชุด ให้ใช้:
+
+```bash
+git push --force-with-lease -u origin main
+```
+
+ก่อน push ตรวจว่าไฟล์ข้อมูลจริงไม่ถูก track:
+
+```bash
+git status --short
+git ls-files
+```
 
 ## Build Apps Script Bundle
 

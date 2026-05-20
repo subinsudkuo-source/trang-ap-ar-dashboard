@@ -7,7 +7,23 @@ const SHEETS = {
   apMatrix: 'AP_Matrix',
   reconcile: 'Reconcile',
   trangCompare: 'Trang_Compare',
+  trialBalance: 'TrialBalance',
 };
+
+const PERIOD_MONTHS = [
+  'มกราคม',
+  'กุมภาพันธ์',
+  'มีนาคม',
+  'เมษายน',
+  'พฤษภาคม',
+  'มิถุนายน',
+  'กรกฎาคม',
+  'สิงหาคม',
+  'กันยายน',
+  'ตุลาคม',
+  'พฤศจิกายน',
+  'ธันวาคม',
+];
 
 const MONTHLY_HEADERS = [
   'entry_id',
@@ -128,6 +144,9 @@ function getBootstrapData() {
 
 function getDashboardData_() {
   const ss = SpreadsheetApp.openById(getSpreadsheetId_());
+  const monthlyDashboard = buildDashboardFromMonthlyEntries_(ss);
+  if (monthlyDashboard) return monthlyDashboard;
+
   const matrixData = readMatrix_(ss);
   const hospitals = matrixData.hospitals.length ? matrixData.hospitals : HOSPITALS;
   const period = matrixData.period || readPeriodFromApInput_(ss) || 'เมษายน 2569';
@@ -135,13 +154,182 @@ function getDashboardData_() {
   return {
     period,
     hospitals,
+    source: 'AP_Input',
     ledger_rows: readApInputRows_(ss, period),
     matrix: matrixData.matrix,
-    trial_balance_rows: [],
+    trial_balance_rows: readTrialBalanceRows_(ss),
     trial_balance_target_rows: [],
     reconciliation: readReconciliationRows_(ss),
     trang_comparison: readTrangComparisonRows_(ss),
   };
+}
+
+function buildDashboardFromMonthlyEntries_(ss) {
+  const records = readMonthlyEntryRows_(ss);
+  if (!records.length) return null;
+
+  const period = getLatestPeriod_(records);
+  const periodRecords = records.filter((record) => String(record.period || '') === period);
+  if (!periodRecords.length) return null;
+
+  const hospitals = getHospitalsFromRecords_(periodRecords);
+  const matrix = buildMonthlyMatrix_(hospitals, periodRecords);
+  const ledgerRows = buildMonthlyLedgerRows_(period, periodRecords);
+  const trialRows = readTrialBalanceRows_(ss);
+  const trialTotals = getTrialBalanceTotals_(trialRows, period);
+  const reconciliation = buildMonthlyReconciliation_(hospitals, matrix, trialTotals);
+
+  return {
+    period,
+    hospitals,
+    source: 'MonthlyEntries',
+    monthly_record_count: periodRecords.length,
+    ledger_rows: ledgerRows,
+    matrix,
+    trial_balance_rows: trialRows,
+    trial_balance_target_rows: trialRows.filter((row) => row.period === period),
+    reconciliation,
+    trang_comparison: buildTrangComparisonFromMatrix_(matrix, hospitals),
+  };
+}
+
+function readMonthlyEntryRows_(ss) {
+  return readTableObjects_(ss, SHEETS.monthlyEntries)
+    .filter((row) => row.period && row.payer_hospital && row.creditor_hospital)
+    .map((row) => ({
+      period: String(row.period || '').trim(),
+      payer_hospital: String(row.payer_hospital || '').trim(),
+      creditor_hospital: String(row.creditor_hospital || '').trim(),
+      ap_amount: parseAmount_(row.ap_amount),
+      source_doc_ref: row.source_doc_ref || '',
+      prepared_by: row.prepared_by || '',
+      review_status: row.review_status || '',
+      notes: row.notes || '',
+      updated_at: row.updated_at || '',
+      created_at: row.created_at || '',
+    }));
+}
+
+function getLatestPeriod_(records) {
+  return records
+    .map((record) => record.period)
+    .filter(Boolean)
+    .sort((a, b) => periodSortValue_(b) - periodSortValue_(a))[0] || '';
+}
+
+function periodSortValue_(period) {
+  const text = String(period || '').trim();
+  const monthIndex = PERIOD_MONTHS.findIndex((month) => text.indexOf(month) !== -1);
+  const yearMatch = text.match(/(25\d{2}|26\d{2})/);
+  const year = yearMatch ? Number(yearMatch[1]) : 0;
+  return year * 12 + (monthIndex >= 0 ? monthIndex : 0);
+}
+
+function getHospitalsFromRecords_(records) {
+  const seen = {};
+  HOSPITALS.forEach((hospital) => {
+    seen[hospital] = true;
+  });
+  records.forEach((record) => {
+    if (record.payer_hospital) seen[record.payer_hospital] = true;
+    if (record.creditor_hospital) seen[record.creditor_hospital] = true;
+  });
+  return Object.keys(seen);
+}
+
+function buildMonthlyMatrix_(hospitals, records) {
+  const matrix = {};
+  hospitals.forEach((payer) => {
+    matrix[payer] = {};
+    hospitals.forEach((creditor) => {
+      matrix[payer][creditor] = 0;
+    });
+  });
+
+  records.forEach((record) => {
+    const payer = record.payer_hospital;
+    const creditor = record.creditor_hospital;
+    if (!matrix[payer] || matrix[payer][creditor] === undefined || payer === creditor) return;
+    matrix[payer][creditor] += parseAmount_(record.ap_amount);
+  });
+  return matrix;
+}
+
+function buildMonthlyLedgerRows_(period, records) {
+  return records.map((record) => ({
+    period,
+    payer_hospital: record.payer_hospital,
+    creditor_hospital: record.creditor_hospital,
+    source_file: 'MonthlyEntries',
+    source_doc_ref: record.source_doc_ref || '',
+    prepared_by: record.prepared_by || '',
+    review_status: record.review_status || '',
+    notes: record.notes || '',
+    amount_total: parseAmount_(record.ap_amount),
+    'รวมเป็นเงิน': parseAmount_(record.ap_amount),
+  }));
+}
+
+function buildMonthlyReconciliation_(hospitals, matrix, trialTotals) {
+  return hospitals.map((hospital) => {
+    const apLedger = hospitals.reduce((sum, creditor) => sum + (matrix[hospital]?.[creditor] || 0), 0);
+    const arFromCounterparties = hospitals.reduce((sum, payer) => sum + (matrix[payer]?.[hospital] || 0), 0);
+    const trial = trialTotals[hospital] || {};
+    const apTrial = trial.ap !== undefined ? trial.ap : apLedger;
+    const arTrial = trial.ar !== undefined ? trial.ar : arFromCounterparties;
+    return {
+      hospital,
+      ap_ledger_total: apLedger,
+      ap_trial_balance: apTrial,
+      ap_difference: apLedger - apTrial,
+      ar_from_counterparties: arFromCounterparties,
+      ar_trial_balance: arTrial,
+      ar_difference: arFromCounterparties - arTrial,
+    };
+  });
+}
+
+function buildTrangComparisonFromMatrix_(matrix, hospitals) {
+  return hospitals
+    .filter((hospital) => hospital !== 'รพ.ตรัง')
+    .map((hospital) => {
+      const trangPayable = matrix['รพ.ตรัง']?.[hospital] || 0;
+      const communityPayable = matrix[hospital]?.['รพ.ตรัง'] || 0;
+      return {
+        community_hospital: hospital,
+        trang_payable_to_community: trangPayable,
+        community_payable_to_trang: communityPayable,
+        net_for_trang: communityPayable - trangPayable,
+      };
+    });
+}
+
+function readTrialBalanceRows_(ss) {
+  return readTableObjects_(ss, SHEETS.trialBalance)
+    .filter((row) => row.Period && row.Hospital)
+    .map((row) => ({
+      period: String(row.Period || '').trim(),
+      account_key: String(row['Account Key'] || '').trim(),
+      account_code: String(row['Account Code'] || '').trim(),
+      hospital: String(row.Hospital || '').trim(),
+      amount: parseAmount_(row.Amount),
+    }));
+}
+
+function getTrialBalanceTotals_(trialRows, period) {
+  const totals = {};
+  trialRows
+    .filter((row) => row.period === period)
+    .forEach((row) => {
+      if (!totals[row.hospital]) totals[row.hospital] = {};
+      if (row.account_key === 'AP_OP_UC_OUT_CUP_IN_PROVINCE' || row.account_code === '2101020199.202') {
+        totals[row.hospital].ap = (totals[row.hospital].ap || 0) + row.amount;
+      }
+      if (row.account_key === 'AR_OP_UC_OUT_CUP_IN_PROVINCE' || row.account_code === '1102050101.203') {
+        totals[row.hospital].ar = (totals[row.hospital].ar || 0) + row.amount;
+      }
+    });
+  return totals;
 }
 
 function readPeriodFromApInput_(ss) {

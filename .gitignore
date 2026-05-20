@@ -9,6 +9,7 @@ node_modules
 dashboard_data.json
 webapp/dashboard_data.json
 webapp/data.js
+webapp/config.local.js
 
 # Generated artifacts
 outputs/

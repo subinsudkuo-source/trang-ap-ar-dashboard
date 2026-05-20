@@ -6,6 +6,7 @@ const ALL_HOSPITALS_LABEL = "ทั้งจังหวัด";
 
 const state = {
   data: null,
+  dataSource: "local",
   view: "dashboard",
   selectedHospital: ALL_HOSPITALS_VALUE,
   trangSort: "net",
@@ -51,6 +52,7 @@ async function init() {
     await loadRuntimeConfig();
     const bootstrap = await loadBootstrapData();
     state.data = bootstrap?.dashboardData || window.DASHBOARD_DATA || (await fetchDashboardData());
+    state.dataSource = bootstrap?.dashboardData ? "sheet" : "local";
     if (bootstrap?.monthlyEntries?.records) {
       hydrateMonthlyRecords(bootstrap.monthlyEntries.records);
     }
@@ -122,8 +124,7 @@ function setupControls() {
   fillSelect("#entryPeriod", monthOptions, "พฤษภาคม 2569");
   fillSelect("#entryPayer", state.data.hospitals, state.data.hospitals[0]);
 
-  document.querySelector("#sourceLine").textContent =
-    `แหล่งข้อมูล: ทะเบียนเจ้าหนี้ตามจ่าย + งบทดลอง สิ้น ${state.data.period}`;
+  updateSourceLine();
   setupBackendControls();
 
   document.querySelector("#periodSelect").addEventListener("change", renderAll);
@@ -198,6 +199,19 @@ function updateBackendStatus(message) {
   } else {
     status.textContent = "โหมด local: ใส่ Apps Script URL เพื่อเชื่อม Sheet";
   }
+}
+
+function updateSourceLine() {
+  const sourceLine = document.querySelector("#sourceLine");
+  if (!sourceLine || !state.data) return;
+  if (state.dataSource === "sheet") {
+    const sourceName = state.data.source === "MonthlyEntries"
+      ? `ฐานข้อมูล Sheet รายเดือน (${state.data.monthly_record_count || 0} รายการ)`
+      : "ฐานข้อมูล Sheet กลาง";
+    sourceLine.textContent = `แหล่งข้อมูล: ${sourceName} · งวด ${state.data.period}`;
+    return;
+  }
+  sourceLine.textContent = `แหล่งข้อมูล: ไฟล์ตัวอย่าง/ไฟล์ local · งวด ${state.data.period}`;
 }
 
 function fillSelect(selector, values, selected) {

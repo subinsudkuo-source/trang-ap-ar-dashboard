@@ -368,6 +368,7 @@ function renderTrangView() {
     labelKey: "counterparty_hospital",
     valueKey: state.trangSort === "trang" ? "selected_payable_to_counterparty" : state.trangSort === "community" ? "counterparty_payable_to_selected" : "net_for_selected",
     color: state.trangSort === "trang" ? "#c7483c" : state.trangSort === "community" ? "#315fa8" : "#18796f",
+    negativeColor: state.trangSort === "net" ? "#c7483c" : "",
     maxRows: rows.length,
   });
   renderTable("#trangCompareTable", [isAllHospitals() ? "โรงพยาบาล" : "คู่บัญชี", isAllHospitals() ? "เจ้าหนี้รวม" : `${selectedLabel} ต้องจ่าย`, isAllHospitals() ? "ลูกหนี้จากคู่บัญชี" : `คู่บัญชีต้องจ่าย ${selectedLabel}`, isAllHospitals() ? "สุทธิ" : `สุทธิฝั่ง ${selectedLabel}`], rows, (row) => [

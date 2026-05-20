@@ -150,17 +150,21 @@ function getDashboardData_() {
   const matrixData = readMatrix_(ss);
   const hospitals = matrixData.hospitals.length ? matrixData.hospitals : HOSPITALS;
   const period = matrixData.period || readPeriodFromApInput_(ss) || 'เมษายน 2569';
+  const ledgerRows = readApInputRows_(ss, period);
+  const matrix = buildMatrixFromLedgerRows_(hospitals, ledgerRows, period);
+  const trialRows = readTrialBalanceRows_(ss);
+  const trialTotals = getTrialBalanceTotals_(trialRows, period);
 
   return {
     period,
     hospitals,
     source: 'AP_Input',
-    ledger_rows: readApInputRows_(ss, period),
-    matrix: matrixData.matrix,
-    trial_balance_rows: readTrialBalanceRows_(ss),
+    ledger_rows: ledgerRows,
+    matrix,
+    trial_balance_rows: trialRows,
     trial_balance_target_rows: [],
-    reconciliation: readReconciliationRows_(ss),
-    trang_comparison: readTrangComparisonRows_(ss),
+    reconciliation: buildMonthlyReconciliation_(hospitals, matrix, trialTotals),
+    trang_comparison: buildTrangComparisonFromMatrix_(matrix, hospitals),
   };
 }
 
@@ -252,6 +256,26 @@ function buildMonthlyMatrix_(hospitals, records) {
     if (!matrix[payer] || matrix[payer][creditor] === undefined || payer === creditor) return;
     matrix[payer][creditor] += parseAmount_(record.ap_amount);
   });
+  return matrix;
+}
+
+function buildMatrixFromLedgerRows_(hospitals, rows, period) {
+  const matrix = {};
+  hospitals.forEach((payer) => {
+    matrix[payer] = {};
+    hospitals.forEach((creditor) => {
+      matrix[payer][creditor] = 0;
+    });
+  });
+
+  rows
+    .filter((row) => !period || row.period === period)
+    .forEach((row) => {
+      const payer = row.payer_hospital;
+      const creditor = row.creditor_hospital;
+      if (!matrix[payer] || matrix[payer][creditor] === undefined || payer === creditor) return;
+      matrix[payer][creditor] += parseAmount_(row.amount_total);
+    });
   return matrix;
 }
 

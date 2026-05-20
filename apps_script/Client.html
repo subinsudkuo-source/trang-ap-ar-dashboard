@@ -376,7 +376,7 @@ function renderDashboard() {
   renderBarChart("#netChart", netRows, {
     labelKey: "counterparty_hospital",
     valueKey: "net_for_selected",
-    color: "#18796f",
+    color: isAllHospitals() ? "#c7483c" : "#18796f",
     negativeColor: "#c7483c",
     maxRows: rows.length,
   });

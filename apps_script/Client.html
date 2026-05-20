@@ -87,6 +87,7 @@ window.DASHBOARD_DATA = {
 const DATA_URL = "./dashboard_data.json";
 const STORAGE_KEY = "trang-ap-ar-dashboard-monthly-v1";
 const BACKEND_URL_KEY = "trang-ap-ar-dashboard-backend-url";
+const DEFAULT_BACKEND_URL = "https://script.google.com/macros/s/AKfycbwsWeRZDYzGV3Y0Dh-FODAQgBuk0s5yiJL-8mturr4NXbjOZxPpKJsvgREKzWm_crqq/exec";
 const ALL_HOSPITALS_VALUE = "";
 const ALL_HOSPITALS_LABEL = "ทั้งจังหวัด";
 
@@ -137,6 +138,9 @@ async function init() {
   try {
     await loadRuntimeConfig();
     const bootstrap = await loadBootstrapData();
+    if (state.backendUrl && !bootstrap?.dashboardData && !isFileRuntime()) {
+      throw new Error("เชื่อม Apps Script ไม่สำเร็จ กรุณาตรวจ Deploy Web App และ APPS_SCRIPT_WEB_APP_URL");
+    }
     state.data = bootstrap?.dashboardData || window.DASHBOARD_DATA || (await fetchDashboardData());
     state.dataSource = bootstrap?.dashboardData ? "sheet" : "local";
     if (bootstrap?.monthlyEntries?.records) {
@@ -156,9 +160,8 @@ async function init() {
 }
 
 async function loadRuntimeConfig() {
-  if (window.APP_CONFIG?.appsScriptUrl && !state.backendUrl) {
-    state.backendUrl = window.APP_CONFIG.appsScriptUrl;
-    localStorage.setItem(BACKEND_URL_KEY, state.backendUrl);
+  if (window.APP_CONFIG?.appsScriptUrl) {
+    applyBackendUrl(window.APP_CONFIG.appsScriptUrl);
     return;
   }
 
@@ -166,13 +169,24 @@ async function loadRuntimeConfig() {
     const response = await fetch("/api/config");
     if (!response.ok) return;
     const config = await response.json();
-    if (config.appsScriptUrl && !state.backendUrl) {
-      state.backendUrl = config.appsScriptUrl;
-      localStorage.setItem(BACKEND_URL_KEY, state.backendUrl);
+    if (config.appsScriptUrl) {
+      applyBackendUrl(config.appsScriptUrl);
+      return;
     }
   } catch {
     // file:// and plain static hosting may not have /api/config.
   }
+
+  if (!state.backendUrl && !isFileRuntime()) {
+    applyBackendUrl(DEFAULT_BACKEND_URL);
+  }
+}
+
+function applyBackendUrl(url) {
+  const cleanUrl = String(url || "").trim();
+  if (!cleanUrl) return;
+  state.backendUrl = cleanUrl;
+  localStorage.setItem(BACKEND_URL_KEY, cleanUrl);
 }
 
 async function loadBootstrapData() {
@@ -875,6 +889,10 @@ function exportMonthlyJson() {
 
 function isAppsScriptRuntime() {
   return typeof google !== "undefined" && Boolean(google.script?.run);
+}
+
+function isFileRuntime() {
+  return window.location.protocol === "file:";
 }
 
 function backendListMonthlyEntries(period, payerHospital) {

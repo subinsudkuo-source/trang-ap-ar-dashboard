@@ -622,7 +622,7 @@ function renderMatrix() {
   const matrix = state.data.matrix;
   const max = Math.max(...payerRows.flatMap((payer) => hospitals.map((creditor) => matrix[payer]?.[creditor] || 0)), 1);
   const total = payerRows.reduce((acc, payer) => acc + hospitals.reduce((sumRow, creditor) => sumRow + (matrix[payer]?.[creditor] || 0), 0), 0);
-  document.querySelector("#matrixTotal").textContent = money(total);
+  document.querySelector("#matrixTotal").textContent = wholeMoney(total);
 
   const header = `<tr><th>ผู้จ่าย \\ เจ้าหนี้</th>${hospitals.map((hospital) => `<th class="num">${escapeHtml(shortHospital(hospital))}</th>`).join("")}</tr>`;
   const body = payerRows
@@ -632,7 +632,7 @@ function renderMatrix() {
           const value = matrix[payer]?.[creditor] || 0;
           const alpha = value ? Math.max(0.12, Math.min(0.78, value / max)) : 0;
           const bg = value ? `background: rgba(24, 121, 111, ${alpha}); color: ${alpha > 0.5 ? "#ffffff" : "#172033"};` : "";
-          return `<td class="matrix-cell ${value ? "" : "matrix-zero"}" style="${bg}">${value ? compact.format(value) : "-"}</td>`;
+          return `<td class="matrix-cell ${value ? "" : "matrix-zero"}" style="${bg}">${value ? wholeMoney(value) : "-"}</td>`;
         })
         .join("");
       return `<tr><th>${escapeHtml(payer)}</th>${cells}</tr>`;
@@ -973,6 +973,12 @@ function money(value) {
   const number = toNumber(value);
   if (Math.abs(number) < 0.005) return "-";
   return number < 0 ? `(${THB.format(Math.abs(number))})` : THB.format(number);
+}
+
+function wholeMoney(value) {
+  const number = Math.round(toNumber(value));
+  if (!number) return "-";
+  return number < 0 ? `(${THB0.format(Math.abs(number))})` : THB0.format(number);
 }
 
 function shortHospital(name) {

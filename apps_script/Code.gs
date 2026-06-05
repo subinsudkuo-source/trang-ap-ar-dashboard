@@ -40,6 +40,18 @@ const MONTHLY_HEADERS = [
   'created_at',
 ];
 
+const TRIAL_BALANCE_HEADERS = [
+  'Period',
+  'Account Key',
+  'Account Code',
+  'Hospital',
+  'Amount',
+  'Account Name',
+  'Source File',
+  'Updated At',
+  'Updated By',
+];
+
 const AUDIT_HEADERS = [
   'timestamp',
   'action',
@@ -88,6 +100,9 @@ function doPost(e) {
     const action = body.action || '';
     if (action === 'saveMonthlyEntries') {
       return jsonOutput(saveMonthlyEntries(body.payload || body));
+    }
+    if (action === 'saveTrialBalanceEntries') {
+      return jsonOutput(saveTrialBalanceEntries(body.payload || body));
     }
     return jsonOutput({ ok: false, error: 'Unknown action' });
   } catch (error) {
@@ -335,6 +350,7 @@ function readTrialBalanceRows_(ss) {
       period: String(row.Period || '').trim(),
       account_key: String(row['Account Key'] || '').trim(),
       account_code: String(row['Account Code'] || '').trim(),
+      account_name: String(row['Account Name'] || '').trim(),
       hospital: String(row.Hospital || '').trim(),
       amount: parseAmount_(row.Amount),
     }));
@@ -545,10 +561,87 @@ function saveMonthlyEntries(payload) {
   }
 }
 
+function saveTrialBalanceEntries(payload) {
+  setupDatabase();
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const period = requireValue_(payload.period, 'period');
+    const entries = Array.isArray(payload.entries) ? payload.entries : [];
+    if (!entries.length) {
+      throw new Error('No trial balance entries to save.');
+    }
+
+    const userEmail = getUserEmail_();
+    const now = new Date();
+    const sheet = ensureTrialBalanceSheet_();
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0].map(String);
+    const indexByKey = {};
+
+    values.slice(1).forEach((row, index) => {
+      const record = rowToObject_(headers, row);
+      const key = trialBalanceKey_(record.Period, record.Hospital, record['Account Code']);
+      if (key) indexByKey[key] = index + 2;
+    });
+
+    const appendRows = [];
+    let updatedCount = 0;
+    entries.forEach((entry) => {
+      const hospital = requireValue_(entry.hospital, 'hospital');
+      const accountCode = requireValue_(entry.accountCode || entry.account_code, 'accountCode');
+      const key = trialBalanceKey_(period, hospital, accountCode);
+      const rowNumber = indexByKey[key];
+      const accountKey = classifyTrialBalanceAccount_(accountCode);
+      const amount = Number(entry.amount || 0);
+      const record = {
+        Period: period,
+        'Account Key': accountKey,
+        'Account Code': accountCode,
+        Hospital: hospital,
+        Amount: Number.isFinite(amount) ? amount : 0,
+        'Account Name': entry.accountName || entry.account_name || '',
+        'Source File': entry.sourceFile || entry.source_file || '',
+        'Updated At': now,
+        'Updated By': userEmail,
+      };
+      const rowValues = headers.map((header) => record[header] !== undefined ? record[header] : '');
+
+      if (rowNumber) {
+        sheet.getRange(rowNumber, 1, 1, headers.length).setValues([rowValues]);
+      } else {
+        appendRows.push(rowValues);
+      }
+      updatedCount += 1;
+    });
+
+    if (appendRows.length) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, appendRows.length, headers.length).setValues(appendRows);
+    }
+
+    appendAudit_('saveTrialBalanceEntries', period, '', userEmail, {
+      count: updatedCount,
+      sourceFile: payload.sourceFile || '',
+    });
+
+    return {
+      ok: true,
+      saved: updatedCount,
+      appended: appendRows.length,
+      updated: updatedCount - appendRows.length,
+      updatedAt: now.toISOString(),
+      userEmail,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function setupDatabase() {
   const spreadsheetId = getSpreadsheetId_();
   const ss = SpreadsheetApp.openById(spreadsheetId);
   ensureSheet_(ss, SHEETS.monthlyEntries, MONTHLY_HEADERS);
+  ensureTrialBalanceSheet_();
   ensureSheet_(ss, SHEETS.auditLog, AUDIT_HEADERS);
   const config = ensureSheet_(ss, SHEETS.appConfig, APP_CONFIG_HEADERS);
   if (config.getLastRow() <= 1) {
@@ -559,6 +652,38 @@ function setupDatabase() {
     config.getRange(2, 1, rows.length, APP_CONFIG_HEADERS.length).setValues(rows);
   }
   return { ok: true };
+}
+
+function ensureTrialBalanceSheet_() {
+  const ss = SpreadsheetApp.openById(getSpreadsheetId_());
+  const sheet = ss.getSheetByName(SHEETS.trialBalance) || ss.insertSheet(SHEETS.trialBalance);
+  if (sheet.getLastRow() < 1) {
+    sheet.getRange(1, 1, 1, TRIAL_BALANCE_HEADERS.length).setValues([TRIAL_BALANCE_HEADERS]);
+  }
+  const existingHeaders = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0]
+    .map((header) => String(header || '').trim());
+  const missingHeaders = TRIAL_BALANCE_HEADERS.filter((header) => !existingHeaders.includes(header));
+  if (missingHeaders.length) {
+    sheet.getRange(1, existingHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
+  }
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, sheet.getLastColumn())
+    .setBackground('#175466')
+    .setFontColor('#ffffff')
+    .setFontWeight('bold');
+  return sheet;
+}
+
+function trialBalanceKey_(period, hospital, accountCode) {
+  if (!period || !hospital || !accountCode) return '';
+  return [period, hospital, accountCode].map((value) => String(value).trim()).join('|');
+}
+
+function classifyTrialBalanceAccount_(accountCode) {
+  const code = String(accountCode || '').trim();
+  if (code === '2101020199.202') return 'AP_OP_UC_OUT_CUP_IN_PROVINCE';
+  if (code === '1102050101.203') return 'AR_OP_UC_OUT_CUP_IN_PROVINCE';
+  return '';
 }
 
 function ensureSheet_(ss, name, headers) {

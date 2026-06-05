@@ -76,6 +76,33 @@
     <section class="view" id="reconcileView" data-view="reconcile">
       <section class="panel">
         <div class="panel-heading">
+          <h2>อัปโหลดงบทดลองรายเดือน</h2>
+          <div class="actions">
+            <button type="button" id="parseTrialBalanceButton">อ่านไฟล์</button>
+            <button type="button" id="saveTrialBalanceButton">บันทึกงบทดลองเข้า Sheet</button>
+          </div>
+        </div>
+        <div class="entry-bar trial-upload-bar">
+          <label>
+            งวดบัญชี
+            <select id="trialUploadPeriod"></select>
+          </label>
+          <label>
+            ไฟล์งบทดลอง Excel
+            <input id="trialBalanceFileInput" type="file" accept=".xlsx,.xls" />
+          </label>
+          <label>
+            รหัสบัญชีที่ต้องการ
+            <input id="trialAccountCodesInput" type="text" value="2101020199.202,1102050101.203" />
+          </label>
+          <output id="trialUploadStatus">ยังไม่ได้อ่านไฟล์</output>
+        </div>
+        <div class="table-wrap trial-preview-wrap">
+          <table id="trialPreviewTable"></table>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-heading">
           <h2>ตรวจสอบทะเบียนเจ้าหนี้กับงบทดลอง</h2>
           <div class="filters">
             <label>

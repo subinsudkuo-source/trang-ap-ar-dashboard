@@ -12,6 +12,11 @@ const state = {
   selectedHospital: ALL_HOSPITALS_VALUE,
   trangSort: "net",
   monthly: loadMonthly(),
+  trialBalanceUpload: {
+    records: [],
+    summary: [],
+    sourceFile: "",
+  },
   backendUrl: localStorage.getItem(BACKEND_URL_KEY) || "",
   userEmail: "",
 };
@@ -137,6 +142,7 @@ function setupControls() {
   fillSelect("#hospitalSelect", [ALL_HOSPITALS_VALUE, ...state.data.hospitals], state.selectedHospital);
   fillSelect("#entryPeriod", monthOptions, "พฤษภาคม 2569");
   fillSelect("#entryPayer", state.data.hospitals, state.data.hospitals[0]);
+  fillSelect("#trialUploadPeriod", [state.data.period, ...monthOptions.filter((m) => m !== state.data.period)], state.data.period);
 
   updateSourceLine();
   setupBackendControls();
@@ -175,6 +181,9 @@ function setupControls() {
   document.querySelector("#saveMonthlyButton").addEventListener("click", saveMonthly);
   document.querySelector("#loadMonthlyButton")?.addEventListener("click", loadMonthlyFromSheet);
   document.querySelector("#saveBackendUrlButton")?.addEventListener("click", saveBackendUrl);
+  document.querySelector("#parseTrialBalanceButton")?.addEventListener("click", parseTrialBalanceUpload);
+  document.querySelector("#saveTrialBalanceButton")?.addEventListener("click", saveTrialBalanceUpload);
+  document.querySelector("#trialBalanceFileInput")?.addEventListener("change", clearTrialBalancePreview);
   document.querySelector("#copyAprilButton").addEventListener("click", copyAprilToMonthly);
   document.querySelector("#resetMonthlyButton").addEventListener("click", resetMonthlyPeriod);
   document.querySelector("#exportMonthlyCsv").addEventListener("click", exportMonthlyCsv);
@@ -587,6 +596,234 @@ async function saveMonthlyToSheet(period, payer) {
   }
 }
 
+function clearTrialBalancePreview() {
+  state.trialBalanceUpload = { records: [], summary: [], sourceFile: "" };
+  const status = document.querySelector("#trialUploadStatus");
+  const table = document.querySelector("#trialPreviewTable");
+  if (status) status.textContent = "ยังไม่ได้อ่านไฟล์";
+  if (table) table.innerHTML = "";
+}
+
+async function parseTrialBalanceUpload() {
+  const status = document.querySelector("#trialUploadStatus");
+  const fileInput = document.querySelector("#trialBalanceFileInput");
+  const period = document.querySelector("#trialUploadPeriod")?.value || getSelectedPeriod();
+  const accountCodes = parseAccountCodeFilter(document.querySelector("#trialAccountCodesInput")?.value || "");
+  const file = fileInput?.files?.[0];
+
+  try {
+    if (!window.XLSX) throw new Error("ยังโหลดตัวอ่าน Excel ไม่สำเร็จ กรุณารีเฟรชหน้าเว็บ");
+    if (!file) throw new Error("กรุณาเลือกไฟล์งบทดลอง Excel");
+    status.textContent = "กำลังอ่านไฟล์...";
+
+    const workbook = window.XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: false });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) throw new Error("ไม่พบชีตในไฟล์ Excel");
+    const rows = window.XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, raw: true, defval: "" });
+    const parsed = parseTrialBalanceRows(rows, period, accountCodes, file.name);
+    if (!parsed.records.length) {
+      throw new Error("ไม่พบรายการตามงวดบัญชีและรหัสบัญชีที่เลือก");
+    }
+
+    state.trialBalanceUpload = {
+      records: parsed.records,
+      summary: parsed.summary,
+      sourceFile: file.name,
+    };
+    renderTrialBalancePreview(parsed.summary);
+    status.textContent = `อ่านสำเร็จ ${parsed.records.length} รายการ จาก ${parsed.periods.join(", ")}`;
+  } catch (error) {
+    clearTrialBalancePreview();
+    status.textContent = `อ่านไฟล์ไม่สำเร็จ: ${error.message}`;
+  }
+}
+
+function parseTrialBalanceRows(rows, targetPeriod, accountCodes, sourceFile) {
+  const periods = new Set();
+  const groups = detectTrialBalanceGroups(rows);
+  const recordsByKey = new Map();
+  const filteredMode = accountCodes.size > 0;
+
+  groups.forEach((group) => {
+    if (targetPeriod && group.period !== targetPeriod) return;
+    periods.add(group.period);
+    const hospitals = readTrialBalanceHospitals(rows, group.start);
+    for (let rowIndex = 3; rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex] || [];
+      const accountCode = normalizeAccountCode(row[group.start]);
+      if (!accountCode) continue;
+      if (filteredMode && !accountCodes.has(accountCode)) continue;
+      const accountName = normalizeText(row[group.start + 1]);
+
+      hospitals.forEach((hospital, index) => {
+        if (!hospital) return;
+        const rawAmount = row[group.start + 2 + index];
+        if (!filteredMode && isBlankCell(rawAmount)) return;
+        const amount = parseAmount(rawAmount);
+        const key = [group.period, hospital, accountCode].join("|");
+        const current = recordsByKey.get(key);
+        if (current) {
+          current.amount += amount;
+          if (!current.accountName && accountName) current.accountName = accountName;
+          return;
+        }
+        recordsByKey.set(key, {
+          period: group.period,
+          hospital,
+          accountCode,
+          accountName,
+          amount,
+          sourceFile,
+        });
+      });
+    }
+  });
+
+  const records = [...recordsByKey.values()];
+  const summary = summarizeTrialBalanceRecords(records);
+  return { records, summary, periods: [...periods] };
+}
+
+function detectTrialBalanceGroups(rows) {
+  const headerRow = rows[0] || [];
+  const groups = [];
+  headerRow.forEach((cell, index) => {
+    const text = normalizeText(cell);
+    if (!text.includes("งบทดลอง") || !text.includes("สิ้น")) return;
+    const period = extractTrialBalancePeriod(text);
+    if (period) groups.push({ start: index, period });
+  });
+  return groups;
+}
+
+function extractTrialBalancePeriod(text) {
+  const match = normalizeText(text).match(/สิ้น\s*([ก-๙]+)\s*(25\d{2}|26\d{2})/);
+  return match ? `${match[1]} ${match[2]}` : "";
+}
+
+function readTrialBalanceHospitals(rows, start) {
+  const shortHeader = rows[1] || [];
+  const detailHeader = rows[2] || [];
+  return Array.from({ length: 10 }, (_, index) => {
+    return normalizeTrialHospital(shortHeader[start + 2 + index]) || normalizeTrialHospital(detailHeader[start + 2 + index]);
+  });
+}
+
+function normalizeTrialHospital(value) {
+  const text = normalizeText(value);
+  if (!text) return "";
+  return state.data.hospitals.find((hospital) => text.includes(shortHospital(hospital))) || "";
+}
+
+function parseAccountCodeFilter(text) {
+  return new Set(
+    String(text || "")
+      .split(/[,\s]+/)
+      .map(normalizeAccountCode)
+      .filter(Boolean),
+  );
+}
+
+function normalizeAccountCode(value) {
+  const text = normalizeText(value).replace(/^['"]+|['"]+$/g, "");
+  if (!text || text === "-") return "";
+  return /^\d+(?:\.\d+)?$/.test(text) ? text : "";
+}
+
+function normalizeText(value) {
+  return String(value ?? "").replace(/\u00a0/g, " ").trim();
+}
+
+function isBlankCell(value) {
+  const text = normalizeText(value);
+  return text === "" || text === "-";
+}
+
+function parseAmount(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const text = normalizeText(value);
+  if (!text || text === "-") return 0;
+  const negative = text.startsWith("(") && text.endsWith(")");
+  const number = Number(text.replace(/[(),\s"]/g, ""));
+  if (!Number.isFinite(number)) return 0;
+  return negative ? -number : number;
+}
+
+function summarizeTrialBalanceRecords(records) {
+  const groups = new Map();
+  records.forEach((record) => {
+    const key = [record.period, record.accountCode, record.accountName].join("|");
+    const item = groups.get(key) || {
+      period: record.period,
+      accountCode: record.accountCode,
+      accountName: record.accountName,
+      hospitalCount: 0,
+      total: 0,
+    };
+    item.hospitalCount += 1;
+    item.total += record.amount;
+    groups.set(key, item);
+  });
+  return [...groups.values()].sort((a, b) => a.accountCode.localeCompare(b.accountCode));
+}
+
+function renderTrialBalancePreview(summary) {
+  renderTable(
+    "#trialPreviewTable",
+    ["งวดบัญชี", "รหัสบัญชี", "ชื่อบัญชี", "จำนวน รพ.", "ยอดรวม"],
+    summary,
+    (row) => [
+      row.period,
+      row.accountCode,
+      row.accountName || "-",
+      row.hospitalCount,
+      money(row.total),
+    ],
+    [3, 4],
+  );
+}
+
+async function saveTrialBalanceUpload() {
+  const status = document.querySelector("#trialUploadStatus");
+  const records = state.trialBalanceUpload.records;
+  if (!records.length) {
+    status.textContent = "กรุณากดอ่านไฟล์และตรวจพรีวิวก่อนบันทึก";
+    return;
+  }
+  if (!isAppsScriptRuntime() && !state.backendUrl && !canUseVercelProxy()) {
+    status.textContent = "ยังไม่ได้เชื่อม Apps Script URL จึงบันทึกเข้า Sheet ไม่ได้";
+    return;
+  }
+
+  status.textContent = "กำลังบันทึกเข้า Sheet...";
+  try {
+    const result = await backendSaveTrialBalanceEntries({
+      period: document.querySelector("#trialUploadPeriod")?.value || getSelectedPeriod(),
+      sourceFile: state.trialBalanceUpload.sourceFile,
+      entries: records,
+    });
+    if (result?.ok === false) throw new Error(result.error || "บันทึกไม่สำเร็จ");
+    status.textContent = result?.optimistic
+      ? "ส่งข้อมูลไป Apps Script แล้ว กรุณารีเฟรช dashboard หลังระบบประมวลผล"
+      : `บันทึกเข้า Sheet แล้ว ${result.saved || records.length} รายการ`;
+    await refreshDashboardFromSheet();
+  } catch (error) {
+    status.textContent = `บันทึกไม่สำเร็จ: ${error.message}`;
+  }
+}
+
+async function refreshDashboardFromSheet() {
+  try {
+    const bootstrap = await loadBootstrapData();
+    if (!bootstrap?.dashboardData) return;
+    state.data = bootstrap.dashboardData;
+    state.dataSource = "sheet";
+    renderAll();
+  } catch {
+    // Keep the saved status visible if refreshing the dashboard fails.
+  }
+}
+
 function copyAprilToMonthly() {
   const period = document.querySelector("#entryPeriod").value;
   const payer = document.querySelector("#entryPayer").value;
@@ -869,6 +1106,57 @@ async function backendSaveMonthlyEntries(payload) {
     });
     return { ok: true, optimistic: true };
   }
+}
+
+async function backendSaveTrialBalanceEntries(payload) {
+  if (isAppsScriptRuntime()) {
+    return googleRun("saveTrialBalanceEntries", payload);
+  }
+
+  if (canUseVercelProxy()) {
+    try {
+      const response = await fetch("/api/apps-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "saveTrialBalanceEntries",
+          payload,
+        }),
+      });
+      if (response.ok) return response.json();
+    } catch {
+      // Local static previews do not have Vercel serverless functions.
+    }
+  }
+
+  if (!state.backendUrl) {
+    return { ok: true, saved: 0, localOnly: true };
+  }
+
+  try {
+    const response = await fetch(state.backendUrl, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "saveTrialBalanceEntries",
+        payload,
+      }),
+    });
+    return response.json();
+  } catch {
+    await fetch(state.backendUrl, {
+      method: "POST",
+      mode: "no-cors",
+      body: JSON.stringify({
+        action: "saveTrialBalanceEntries",
+        payload,
+      }),
+    });
+    return { ok: true, optimistic: true };
+  }
+}
+
+function canUseVercelProxy() {
+  return !isFileRuntime() && !isAppsScriptRuntime();
 }
 
 function googleRun(functionName, ...args) {

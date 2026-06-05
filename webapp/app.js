@@ -218,14 +218,19 @@ function updateBackendStatus(message) {
 function updateSourceLine() {
   const sourceLine = document.querySelector("#sourceLine");
   if (!sourceLine || !state.data) return;
+  const selectedPeriod = getSelectedPeriod();
   if (state.dataSource === "sheet") {
     const sourceName = state.data.source === "MonthlyEntries"
       ? `ฐานข้อมูล Sheet รายเดือน (${state.data.monthly_record_count || 0} รายการ)`
       : "ฐานข้อมูล Sheet กลาง";
-    sourceLine.textContent = `แหล่งข้อมูล: ${sourceName} · งวด ${state.data.period}`;
+    sourceLine.textContent = `แหล่งข้อมูล: ${sourceName} · งวด ${selectedPeriod}`;
     return;
   }
-  sourceLine.textContent = `แหล่งข้อมูล: ไฟล์ตัวอย่าง/ไฟล์ local · งวด ${state.data.period}`;
+  sourceLine.textContent = `แหล่งข้อมูล: ไฟล์ตัวอย่าง/ไฟล์ local · งวด ${selectedPeriod}`;
+}
+
+function getSelectedPeriod() {
+  return document.querySelector("#periodSelect")?.value || state.data?.period || "";
 }
 
 function fillSelect(selector, values, selected) {
@@ -248,6 +253,7 @@ function switchView(view) {
 
 function renderAll() {
   if (!state.data) return;
+  updateSourceLine();
   renderDashboard();
   if (state.view === "trang") renderTrangView();
   if (state.view === "reconcile") renderReconcile();

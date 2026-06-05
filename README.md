@@ -1,4 +1,4 @@
-# Trang Hospital AP/AR Reconciliation Dashboard
+# Trang Hospital Creditor/Debtor Reconciliation Dashboard
 
 ระบบ Dashboard สำหรับตรวจทานเจ้าหนี้/ลูกหนี้ระหว่างโรงพยาบาลตรังและโรงพยาบาลชุมชนในจังหวัดตรัง โดยใช้ Google Sheets เป็นฐานข้อมูลกลางผ่าน Apps Script
 

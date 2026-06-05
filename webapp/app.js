@@ -285,8 +285,8 @@ function renderDashboard() {
   document.querySelector("#kpiGrid").innerHTML = [
     statCard(isAllHospitals() ? "เจ้าหนี้รวมทั้งจังหวัด" : `${selectedLabel} ต้องจ่ายคู่บัญชี`, money(hospitalPayable), isAllHospitals() ? "รวมจากทะเบียนเจ้าหนี้ทุกโรงพยาบาล" : `จากทะเบียนเจ้าหนี้ ${selectedLabel}`, "info"),
     statCard(isAllHospitals() ? "ลูกหนี้จากคู่บัญชีรวม" : `คู่บัญชีต้องจ่าย ${selectedLabel}`, money(counterpartyPayable), "จากทะเบียนเจ้าหนี้ของคู่บัญชี", "good"),
-    statCard(isAllHospitals() ? "ผลต่าง AP รวม" : `สุทธิฝั่ง ${selectedLabel}`, money(net), isAllHospitals() ? `AP ต่างรวม ${money(apDiff)}` : net >= 0 ? `${selectedLabel} สุทธิรับ` : `${selectedLabel} สุทธิจ่าย`, net >= 0 ? "good" : "danger"),
-    statCard(isAllHospitals() ? "รายการต้องตรวจสอบ" : `สถานะงบทดลอง ${selectedLabel}`, isAllHospitals() ? `${apReviewCount + arReviewCount} รายการ` : apNeedsReview ? "ตรวจสอบ" : "OK", `AP ต่าง ${money(apDiff)} · AR ต่าง ${money(arDiff)}`, isAllHospitals() ? apReviewCount + arReviewCount ? "warn" : "good" : apNeedsReview ? "warn" : "good"),
+    statCard(isAllHospitals() ? "ผลต่างเจ้าหนี้รวม" : `สุทธิฝั่ง ${selectedLabel}`, money(net), isAllHospitals() ? `เจ้าหนี้ต่างรวม ${money(apDiff)}` : net >= 0 ? `${selectedLabel} สุทธิรับ` : `${selectedLabel} สุทธิจ่าย`, net >= 0 ? "good" : "danger"),
+    statCard(isAllHospitals() ? "รายการต้องตรวจสอบ" : `สถานะงบทดลอง ${selectedLabel}`, isAllHospitals() ? `${apReviewCount + arReviewCount} รายการ` : apNeedsReview ? "ตรวจสอบ" : "OK", `เจ้าหนี้ต่าง ${money(apDiff)} · ลูกหนี้ต่าง ${money(arDiff)}`, isAllHospitals() ? apReviewCount + arReviewCount ? "warn" : "good" : apNeedsReview ? "warn" : "good"),
   ].join("");
 
   const chartTitle = document.querySelector("#dashboardView .chart-panel h2");
@@ -320,7 +320,7 @@ function renderAlertList() {
     .filter((row) => isAllHospitals() || row.hospital === selected)
     .map((row) => ({
       ...row,
-      severity: Math.abs(row.ap_difference) > 0.01 ? "AP" : Math.abs(row.ar_difference) > 0.01 ? "AR" : "",
+      severity: Math.abs(row.ap_difference) > 0.01 ? "เจ้าหนี้" : Math.abs(row.ar_difference) > 0.01 ? "ลูกหนี้" : "",
     }))
     .filter((row) => row.severity)
     .sort((a, b) => Math.abs(b.ap_difference || b.ar_difference) - Math.abs(a.ap_difference || a.ar_difference))
@@ -330,8 +330,8 @@ function renderAlertList() {
   document.querySelector("#alertList").innerHTML = rows.length
     ? rows
         .map((row) => {
-          const apText = `AP ต่าง ${money(row.ap_difference)}`;
-          const arText = `AR ต่าง ${money(row.ar_difference)}`;
+          const apText = `เจ้าหนี้ต่าง ${money(row.ap_difference)}`;
+          const arText = `ลูกหนี้ต่าง ${money(row.ar_difference)}`;
           return `
             <article class="alert-item">
               <div class="alert-title">
@@ -409,7 +409,7 @@ function renderReconcile() {
 
   renderTable(
     "#reconcileTable",
-    ["โรงพยาบาล", "ทะเบียนเจ้าหนี้", "งบทดลอง AP", "ผลต่าง AP", "สถานะ AP", "AR จากคู่บัญชี", "งบทดลอง AR", "ผลต่าง AR"],
+    ["โรงพยาบาล", "ทะเบียนเจ้าหนี้", "งบทดลองเจ้าหนี้", "ผลต่างเจ้าหนี้", "สถานะเจ้าหนี้", "ลูกหนี้จากคู่บัญชี", "งบทดลองลูกหนี้", "ผลต่างลูกหนี้"],
     rows,
     (row) => {
       const review = Math.abs(row.ap_difference) > 0.01;
@@ -443,7 +443,7 @@ function renderMonthly() {
     <thead>
       <tr>
         <th>เจ้าหนี้</th>
-        <th class="num">ยอด AP</th>
+        <th class="num">ยอดเจ้าหนี้</th>
         <th>เอกสารอ้างอิง</th>
         <th>ผู้จัดทำ</th>
         <th>สถานะ</th>
@@ -796,7 +796,7 @@ function exportMonthlyCsv() {
   const period = document.querySelector("#entryPeriod").value;
   const payer = document.querySelector("#entryPayer").value;
   const records = getMonthlyRecords(period, payer);
-  const rows = [["Period", "Payer Hospital", "Creditor Hospital", "AP Amount", "Source / Doc Ref", "Prepared By", "Review Status", "Notes"]];
+  const rows = [["Period", "Payer Hospital", "Creditor Hospital", "Creditor Amount", "Source / Doc Ref", "Prepared By", "Review Status", "Notes"]];
   Object.entries(records)
     .filter(([creditor]) => creditor !== "__meta")
     .forEach(([creditor, record]) => {

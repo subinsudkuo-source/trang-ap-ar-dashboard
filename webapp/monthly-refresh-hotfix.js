@@ -3,11 +3,15 @@
     return;
   }
 
+  const DEFAULT_MONTHLY_PERIOD = "พฤษภาคม 2569";
   const originalBackendSaveMonthlyEntries = backendSaveMonthlyEntries;
 
   document.addEventListener("DOMContentLoaded", () => {
-    document.querySelector("#periodSelect")?.addEventListener("change", (event) => {
-      refreshDashboardForMonthlyPeriod({ period: event.target.value });
+    waitForMonthlyControls(() => {
+      document.querySelector("#periodSelect")?.addEventListener("change", (event) => {
+        refreshDashboardForMonthlyPeriod({ period: event.target.value });
+      });
+      refreshDashboardForMonthlyPeriod({ period: document.querySelector("#entryPeriod")?.value || DEFAULT_MONTHLY_PERIOD });
     });
   });
 
@@ -19,8 +23,18 @@
     return result;
   };
 
+  function waitForMonthlyControls(callback, attempts = 30) {
+    if (document.querySelector("#entryPeriod") && document.querySelector("#periodSelect") && state.data) {
+      callback();
+      return;
+    }
+    if (attempts > 0) {
+      setTimeout(() => waitForMonthlyControls(callback, attempts - 1), 250);
+    }
+  }
+
   async function refreshDashboardForMonthlyPeriod(payload) {
-    const period = payload.period || document.querySelector("#entryPeriod")?.value || state.data?.period || "";
+    const period = payload.period || document.querySelector("#entryPeriod")?.value || state.data?.period || DEFAULT_MONTHLY_PERIOD;
     if (!period) return;
 
     try {
@@ -150,6 +164,9 @@
     const hospitals = state.data.hospitals || [];
     if (document.querySelector("#periodSelect")) {
       fillSelect("#periodSelect", [period, ...monthOptions.filter((month) => month !== period)], period);
+    }
+    if (document.querySelector("#entryPeriod")) {
+      fillSelect("#entryPeriod", monthOptions, period);
     }
     if (state.selectedHospital && !hospitals.includes(state.selectedHospital)) {
       state.selectedHospital = ALL_HOSPITALS_VALUE;

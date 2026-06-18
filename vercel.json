@@ -10,6 +10,10 @@
       "destination": "/webapp/app.js"
     },
     {
+      "source": "/monthly-refresh-hotfix.js",
+      "destination": "/webapp/monthly-refresh-hotfix.js"
+    },
+    {
       "source": "/styles.css",
       "destination": "/webapp/styles.css"
     },

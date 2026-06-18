@@ -11,9 +11,11 @@ mkdirSync(outputsDir, { recursive: true });
 const css = readFileSync(join(root, "webapp", "styles.css"), "utf8");
 const data = readFileSync(join(root, "webapp", "data.example.js"), "utf8");
 const app = readFileSync(join(root, "webapp", "app.js"), "utf8");
+const monthlyRefreshHotfix = readFileSync(join(root, "webapp", "monthly-refresh-hotfix.js"), "utf8");
 
 writeFileSync(join(appsScriptDir, "Styles.html"), `<style>\n${css}\n</style>\n`);
 writeFileSync(join(appsScriptDir, "Client.html"), `<script>\n${data}\n${app}\n</script>\n`);
+writeFileSync(join(appsScriptDir, "MonthlyRefreshHotfix.html"), `<script>\n${monthlyRefreshHotfix}\n</script>\n`);
 
 execFileSync("zip", [
   "-qr",

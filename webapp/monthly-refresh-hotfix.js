@@ -1,0 +1,48 @@
+(function () {
+  if (typeof backendSaveMonthlyEntries !== "function" || typeof backendBootstrap !== "function") {
+    return;
+  }
+
+  const originalBackendSaveMonthlyEntries = backendSaveMonthlyEntries;
+
+  backendSaveMonthlyEntries = async function patchedBackendSaveMonthlyEntries(payload) {
+    const result = await originalBackendSaveMonthlyEntries(payload);
+    if (result?.ok !== false && !result?.localOnly) {
+      await refreshDashboardAfterMonthlySave(payload);
+    }
+    return result;
+  };
+
+  async function refreshDashboardAfterMonthlySave(payload) {
+    try {
+      const bootstrap = await backendBootstrap();
+      if (!bootstrap?.dashboardData) return;
+      state.data = bootstrap.dashboardData;
+      state.dataSource = "sheet";
+      syncDashboardControls(payload || {});
+      renderAll();
+    } catch {
+      // Keep the normal save status visible if the dashboard refresh fails.
+    }
+  }
+
+  function syncDashboardControls(payload) {
+    const hospitals = state.data.hospitals || [];
+    const selectedPeriod = payload.period || state.data.period;
+
+    if (document.querySelector("#periodSelect")) {
+      fillSelect("#periodSelect", [state.data.period, ...monthOptions.filter((month) => month !== state.data.period)], selectedPeriod);
+    }
+
+    if (state.selectedHospital && !hospitals.includes(state.selectedHospital)) {
+      state.selectedHospital = ALL_HOSPITALS_VALUE;
+    }
+    if (document.querySelector("#hospitalSelect")) {
+      fillSelect("#hospitalSelect", [ALL_HOSPITALS_VALUE, ...hospitals], state.selectedHospital);
+    }
+
+    if (document.querySelector("#entryPayer")) {
+      fillSelect("#entryPayer", hospitals, payload.payerHospital || payload.payer_hospital || document.querySelector("#entryPayer").value || hospitals[0]);
+    }
+  }
+})();

@@ -39,9 +39,15 @@
     if (!period) return;
 
     try {
-      const result = await backendListMonthlyEntries(period, "");
+      let result = await backendListMonthlyEntries(period, "");
       if (!result?.ok) return;
-      applyMonthlyDashboard(period, result.records || []);
+      let records = result.records || [];
+      if (!records.length) {
+        result = await backendListMonthlyEntries("", "");
+        if (!result?.ok) return;
+        records = (result.records || []).filter((record) => normalizePeriod(record.period) === period);
+      }
+      applyMonthlyDashboard(period, records);
     } catch {
       // Keep the normal save status visible if the dashboard refresh fails.
     }
@@ -188,6 +194,53 @@
     if (typeof parseAmount === "function") return parseAmount(value);
     const number = Number(String(value ?? "").replace(/[(),\s"]/g, ""));
     return Number.isFinite(number) ? number : 0;
+  }
+
+  function normalizePeriod(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    if (monthOptions.includes(text)) return text;
+
+    const date = new Date(text);
+    if (!Number.isNaN(date.getTime())) {
+      const buddhistYear = date.getFullYear() + 543;
+      const monthNames = [
+        "มกราคม",
+        "กุมภาพันธ์",
+        "มีนาคม",
+        "เมษายน",
+        "พฤษภาคม",
+        "มิถุนายน",
+        "กรกฎาคม",
+        "สิงหาคม",
+        "กันยายน",
+        "ตุลาคม",
+        "พฤศจิกายน",
+        "ธันวาคม",
+      ];
+      return `${monthNames[date.getMonth()]} ${buddhistYear}`;
+    }
+
+    const thaiDate = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](25\d{2}|26\d{2})$/);
+    if (thaiDate) {
+      const monthNames = [
+        "มกราคม",
+        "กุมภาพันธ์",
+        "มีนาคม",
+        "เมษายน",
+        "พฤษภาคม",
+        "มิถุนายน",
+        "กรกฎาคม",
+        "สิงหาคม",
+        "กันยายน",
+        "ตุลาคม",
+        "พฤศจิกายน",
+        "ธันวาคม",
+      ];
+      return `${monthNames[Number(thaiDate[2]) - 1]} ${thaiDate[3]}`;
+    }
+
+    return text;
   }
 })();
 </script>

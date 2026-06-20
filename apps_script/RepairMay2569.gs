@@ -1,3 +1,4 @@
+// Vercel redeploy trigger: 2026-06-20 May 2569 Apps Script repair
 function repairMay2569Sheet() {
   const spreadsheetId = '1GAVCg8aHDCu6xq7DemiulqRaDQKf1a1kLOSXRnwhwW4';
   const period = 'พฤษภาคม 2569';

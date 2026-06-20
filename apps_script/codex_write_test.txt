@@ -1,0 +1,2 @@
+Codex write access test for trang-ap-ar-dashboard.
+Created after GitHub app authorization.

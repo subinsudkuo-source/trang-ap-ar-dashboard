@@ -40,7 +40,9 @@
     try {
       const result = await backendListMonthlyEntries(period, "");
       if (!result?.ok) return;
-      applyMonthlyDashboard(period, result.records || []);
+      const records = result.records || [];
+      if (!records.length) return;
+      applyMonthlyDashboard(period, records);
     } catch {
       // Keep the normal save status visible if the dashboard refresh fails.
     }

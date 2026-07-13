@@ -3,7 +3,7 @@
     return;
   }
 
-  const DEFAULT_MONTHLY_PERIOD = "พฤษภาคม 2569";
+  const DEFAULT_MONTHLY_PERIOD = "มิถุนายน 2569";
   const originalBackendSaveMonthlyEntries = backendSaveMonthlyEntries;
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -11,7 +11,7 @@
       document.querySelector("#periodSelect")?.addEventListener("change", (event) => {
         refreshDashboardForMonthlyPeriod({ period: event.target.value });
       });
-      refreshDashboardForMonthlyPeriod({ period: document.querySelector("#entryPeriod")?.value || DEFAULT_MONTHLY_PERIOD });
+      refreshDashboardForMonthlyPeriod({ period: document.querySelector("#entryPeriod")?.value || state.data?.period || DEFAULT_MONTHLY_PERIOD });
     });
   });
 
@@ -38,9 +38,14 @@
     if (!period) return;
 
     try {
-      const result = await backendListMonthlyEntries(period, "");
+      let result = await backendListMonthlyEntries(period, "");
       if (!result?.ok) return;
-      const records = result.records || [];
+      let records = result.records || [];
+      if (!records.length) {
+        result = await backendListMonthlyEntries("", "");
+        if (!result?.ok) return;
+        records = (result.records || []).filter((record) => normalizePeriod(record.period) === period);
+      }
       if (!records.length) return;
       applyMonthlyDashboard(period, records);
     } catch {
@@ -75,7 +80,7 @@
       ledger_rows: ledgerRows,
       matrix,
       trial_balance_rows: trialRows,
-      trial_balance_target_rows: trialRows.filter((row) => row.period === period),
+      trial_balance_target_rows: trialRows.filter((row) => normalizePeriod(row.period) === period),
       reconciliation: buildReconciliation(hospitals, matrix, trialTotals),
       trang_comparison: buildTrangComparison(matrix, hospitals),
     };
@@ -115,7 +120,7 @@
   function getTrialTotals(trialRows, period) {
     const totals = {};
     trialRows
-      .filter((row) => row.period === period)
+      .filter((row) => normalizePeriod(row.period) === period)
       .forEach((row) => {
         if (!totals[row.hospital]) totals[row.hospital] = {};
         if (row.account_key === "AP_OP_UC_OUT_CUP_IN_PROVINCE" || row.account_code === "2101020199.202") {
@@ -189,5 +194,33 @@
     if (typeof parseAmount === "function") return parseAmount(value);
     const number = Number(String(value ?? "").replace(/[(),\s"]/g, ""));
     return Number.isFinite(number) ? number : 0;
+  }
+
+  function normalizePeriod(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    if (monthOptions.includes(text)) return text;
+
+    const date = new Date(text);
+    if (!Number.isNaN(date.getTime())) {
+      const buddhistYear = date.getFullYear() + 543;
+      const monthNames = [
+        "มกราคม",
+        "กุมภาพันธ์",
+        "มีนาคม",
+        "เมษายน",
+        "พฤษภาคม",
+        "มิถุนายน",
+        "กรกฎาคม",
+        "สิงหาคม",
+        "กันยายน",
+        "ตุลาคม",
+        "พฤศจิกายน",
+        "ธันวาคม",
+      ];
+      return `${monthNames[date.getMonth()]} ${buddhistYear}`;
+    }
+
+    return text;
   }
 })();

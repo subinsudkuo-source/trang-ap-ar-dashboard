@@ -203,7 +203,8 @@
 
     const date = new Date(text);
     if (!Number.isNaN(date.getTime())) {
-      const buddhistYear = date.getFullYear() + 543;
+      const rawYear = date.getFullYear();
+      const buddhistYear = rawYear >= 2400 ? rawYear : rawYear + 543;
       const monthNames = [
         "มกราคม",
         "กุมภาพันธ์",

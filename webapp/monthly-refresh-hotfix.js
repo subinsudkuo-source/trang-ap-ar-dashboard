@@ -5,6 +5,30 @@
 
   const DEFAULT_MONTHLY_PERIOD = "มิถุนายน 2569";
   const originalBackendSaveMonthlyEntries = backendSaveMonthlyEntries;
+  const TRIAL_BALANCE_OVERRIDES = {
+    "มิถุนายน 2569": [
+      { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.ตรัง", amount: 50281525 },
+      { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.กันตัง", amount: 239270 },
+      { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.ย่านตาขาว", amount: 2075953 },
+      { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.ปะเหลียน", amount: 221006 },
+      { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.สิเกา", amount: 439241 },
+      { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.ห้วยยอด", amount: 1078740 },
+      { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.วังวิเศษ", amount: 951085 },
+      { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.นาโยง", amount: 302014.25 },
+      { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.รัษฎา", amount: 265839.75 },
+      { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.หาดสำราญ", amount: 65765.54 },
+      { period: "มิถุนายน 2569", account_key: "AP_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "2101020199.202", hospital: "รพ.ตรัง", amount: 380121.5 },
+      { period: "มิถุนายน 2569", account_key: "AP_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "2101020199.202", hospital: "รพ.กันตัง", amount: 6387977 },
+      { period: "มิถุนายน 2569", account_key: "AP_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "2101020199.202", hospital: "รพ.ย่านตาขาว", amount: 9528780 },
+      { period: "มิถุนายน 2569", account_key: "AP_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "2101020199.202", hospital: "รพ.ปะเหลียน", amount: 6990925 },
+      { period: "มิถุนายน 2569", account_key: "AP_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "2101020199.202", hospital: "รพ.สิเกา", amount: 2062200 },
+      { period: "มิถุนายน 2569", account_key: "AP_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "2101020199.202", hospital: "รพ.ห้วยยอด", amount: 11955504 },
+      { period: "มิถุนายน 2569", account_key: "AP_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "2101020199.202", hospital: "รพ.วังวิเศษ", amount: 4210498 },
+      { period: "มิถุนายน 2569", account_key: "AP_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "2101020199.202", hospital: "รพ.นาโยง", amount: 4418240 },
+      { period: "มิถุนายน 2569", account_key: "AP_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "2101020199.202", hospital: "รพ.รัษฎา", amount: 1769859 },
+      { period: "มิถุนายน 2569", account_key: "AP_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "2101020199.202", hospital: "รพ.หาดสำราญ", amount: 1741070 },
+    ],
+  };
 
   document.addEventListener("DOMContentLoaded", () => {
     waitForMonthlyControls(() => {
@@ -68,7 +92,7 @@
       amount_total: amount(record.ap_amount),
       "รวมเป็นเงิน": amount(record.ap_amount),
     }));
-    const trialRows = state.data?.trial_balance_rows || [];
+    const trialRows = mergeTrialBalanceOverrides(state.data?.trial_balance_rows || [], period);
     const trialTotals = getTrialTotals(trialRows, period);
 
     state.data = {
@@ -131,6 +155,21 @@
         }
       });
     return totals;
+  }
+
+  function mergeTrialBalanceOverrides(trialRows, period) {
+    const overrides = TRIAL_BALANCE_OVERRIDES[period] || [];
+    if (!overrides.length) return trialRows;
+
+    const rows = [...trialRows];
+    const seen = new Set(
+      rows.map((row) => [normalizePeriod(row.period), row.hospital, row.account_code].join("|")),
+    );
+    overrides.forEach((row) => {
+      const key = [normalizePeriod(row.period), row.hospital, row.account_code].join("|");
+      if (!seen.has(key)) rows.push(row);
+    });
+    return rows;
   }
 
   function buildReconciliation(hospitals, matrix, trialTotals) {

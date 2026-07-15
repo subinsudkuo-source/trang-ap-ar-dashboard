@@ -3,7 +3,7 @@
     return;
   }
 
-  const DEFAULT_MONTHLY_PERIOD = "มิถุนายน 2569";
+  const DEFAULT_MONTHLY_PERIOD = "";
   const originalBackendSaveMonthlyEntries = backendSaveMonthlyEntries;
   const TRIAL_BALANCE_OVERRIDES = {
     "มิถุนายน 2569": [
@@ -35,7 +35,7 @@
       document.querySelector("#periodSelect")?.addEventListener("change", (event) => {
         refreshDashboardForMonthlyPeriod({ period: event.target.value });
       });
-      refreshDashboardForMonthlyPeriod({ period: document.querySelector("#entryPeriod")?.value || state.data?.period || DEFAULT_MONTHLY_PERIOD });
+      refreshDashboardForMonthlyPeriod({ period: state.data?.period || document.querySelector("#periodSelect")?.value || document.querySelector("#entryPeriod")?.value || DEFAULT_MONTHLY_PERIOD });
     });
   });
 
@@ -58,7 +58,7 @@
   }
 
   async function refreshDashboardForMonthlyPeriod(payload) {
-    const period = payload.period || document.querySelector("#entryPeriod")?.value || state.data?.period || DEFAULT_MONTHLY_PERIOD;
+    const period = payload.period || state.data?.period || document.querySelector("#periodSelect")?.value || document.querySelector("#entryPeriod")?.value || DEFAULT_MONTHLY_PERIOD;
     if (!period) return;
 
     try {

@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build:apps-script": "node build_apps_script_bundle.mjs",
-    "start": "python3 -m http.server 4174 --directory webapp"
+    "start": "node server.mjs",
+    "start:static": "python3 -m http.server 4174 --directory webapp",
+    "start:docker": "node server.mjs"
   }
 }

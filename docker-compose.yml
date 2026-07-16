@@ -1,0 +1,11 @@
+services:
+  trang-ap-ar-dashboard:
+    build: .
+    image: trang-ap-ar-dashboard:latest
+    container_name: trang-ap-ar-dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      APPS_SCRIPT_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwoBZYkXTRDKhjBA5a6c5JIK34d4tWCc5mmMPG9ItxGms3yideRMqP_YSmlnyC7wjJs/exec"

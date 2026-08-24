@@ -448,6 +448,45 @@ tbody tr:hover {
   max-height: 280px;
 }
 
+.raw-report-heading {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 12px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.raw-report-heading strong {
+  font-size: 0.98rem;
+}
+
+.raw-excel-wrap {
+  border-color: #8f98a8;
+  border-radius: 4px;
+}
+
+.raw-excel-wrap table {
+  min-width: 1480px;
+}
+
+.raw-excel-wrap th,
+.raw-excel-wrap td {
+  padding: 5px 7px;
+  border: 1px solid #3f4754;
+  font-size: 0.78rem;
+}
+
+.raw-excel-wrap th {
+  background: #f7f7f7;
+  color: #111827;
+  text-align: center;
+}
+
+.raw-excel-wrap tbody tr:last-child {
+  background: #9edff3;
+  font-weight: 800;
+}
+
 .backend-bar {
   display: grid;
   grid-template-columns: minmax(280px, 1fr) auto minmax(180px, auto);

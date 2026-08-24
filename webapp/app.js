@@ -910,9 +910,16 @@ function renderRawAp() {
   const total = rows.reduce((sum, row) => sum + toNumber(row.amount_total), 0);
   const payerCount = new Set(rows.map((row) => row.payer_hospital)).size;
   const creditorCount = new Set(rows.map((row) => row.creditor_hospital)).size;
-  const monthColumns = getRawMonthColumns(rows, period);
-  const headers = ["โรงพยาบาลผู้จ่าย", "เจ้าหนี้", ...monthColumns.map((column) => column.label), "รวมเป็นเงิน", "เอกสารอ้างอิง", "หมายเหตุ"];
-  const numericIndexes = monthColumns.map((_, index) => index + 2).concat(2 + monthColumns.length);
+  const columns = getRawExcelColumns();
+  const headers = ["ลำดับ", "ชื่อ รพ. เจ้าหนี้", ...columns.map((column) => column.label), "รวมเป็นเงิน", "หมายเหตุ"];
+  const numericIndexes = columns.map((_, index) => index + 2).concat(2 + columns.length);
+  const selectedHospitalLabel = hospital || (payerCount === 1 ? rows[0]?.payer_hospital : ALL_HOSPITALS_LABEL);
+
+  document.querySelector("#rawApReportHeading").innerHTML = `
+    <strong>ทะเบียนคุมบัญชีเจ้าหนี้ค่ารักษา OP - UC นอก CUP (ในจังหวัดสังกัด สธ.) ปีงบประมาณ 2569</strong>
+    <span>${escapeHtml(selectedHospitalLabel || ALL_HOSPITALS_LABEL)}</span>
+    <span>ประจำเดือน ${escapeHtml(period || "-")}</span>
+  `;
 
   document.querySelector("#rawApSummary").innerHTML = [
     summaryPill("งวดบัญชี", period || "-"),
@@ -926,15 +933,8 @@ function renderRawAp() {
   renderTable(
     "#rawApTable",
     headers,
-    rows,
-    (row) => [
-      row.payer_hospital,
-      row.creditor_hospital,
-      ...monthColumns.map((column) => money(rawMonthAmount(row, column))),
-      money(row.amount_total),
-      row.source_doc_ref || row.source_file || "",
-      row.notes || "",
-    ],
+    rows.length ? [...rows, rawTotalRow(rows)] : [],
+    (row, index) => rawExcelRow(row, columns, index),
     numericIndexes,
   );
 }
@@ -977,37 +977,57 @@ function getRawApRows(period, hospital, query) {
     });
 }
 
-function getRawMonthColumns(rows, period) {
-  const columns = new Map();
-  rows.forEach((row) => {
-    Object.keys(row).forEach((key) => {
-      const label = rawMonthLabel(key);
-      if (label) columns.set(label, { key, label });
-    });
+function getRawExcelColumns() {
+  return [
+    { label: "เจ้าหนี้ปีงบ 2565", keys: ["เจ้าหนี้ปีงบ 2565", "เจ้าหนี้ปีงบ2565"] },
+    { label: "เจ้าหนี้ปีงบ 2566", keys: ["เจ้าหนี้ปีงบ 2566", "เจ้าหนี้ปีงบ2566"] },
+    { label: "เจ้าหนี้งบ 2567", keys: ["เจ้าหนี้งบ 2567", "เจ้าหนี้ปีงบ 2567", "เจ้าหนี้งบ2567"] },
+    { label: "เจ้าหนี้งบ 2568", keys: ["เจ้าหนี้งบ 2568", "เจ้าหนี้ปีงบ 2568", "เจ้าหนี้งบ2568"] },
+    { label: "ต.ค.2568", keys: ["ต.ค.2568", "ต.ค.68"] },
+    { label: "พ.ย.2568", keys: ["พ.ย.2568", "พ.ย.68"] },
+    { label: "ธ.ค.2568", keys: ["ธ.ค.2568", "ธ.ค.68"] },
+    { label: "ม.ค.2569", keys: ["ม.ค.2569", "ม.ค.69"] },
+    { label: "ก.พ.2569", keys: ["ก.พ.2569", "ก.พ.69"] },
+    { label: "มี.ค.2569", keys: ["มี.ค.2569", "มี.ค.69"] },
+    { label: "เม.ย.2569", keys: ["เม.ย.2569", "เม.ย.69"] },
+    { label: "พ.ค. 2569", keys: ["พ.ค.2569", "พ.ค. 2569", "พ.ค.69"] },
+    { label: "มิ.ย. 2569", keys: ["มิ.ย.2569", "มิ.ย. 2569", "มิ.ย.69"] },
+    { label: "ก.ค. 2569", keys: ["ก.ค.2569", "ก.ค. 2569", "ก.ค.69"] },
+    { label: "ส.ค. 2569", keys: ["ส.ค.2569", "ส.ค. 2569", "ส.ค.69"] },
+    { label: "ก.ย. 2569", keys: ["ก.ย.2569", "ก.ย. 2569", "ก.ย.69"] },
+  ];
+}
+
+function rawExcelRow(row, columns, index) {
+  const isTotal = row.__total;
+  return [
+    isTotal ? "" : index + 1,
+    isTotal ? "รวมเจ้าหนี้คงเหลือ" : row.creditor_hospital,
+    ...columns.map((column) => rawExcelMoney(rawColumnAmount(row, column))),
+    rawExcelMoney(row.amount_total),
+    isTotal ? "" : row.notes || "",
+  ];
+}
+
+function rawTotalRow(rows) {
+  const total = rows.reduce((sum, row) => sum + toNumber(row.amount_total), 0);
+  const columnTotals = {};
+  getRawExcelColumns().forEach((column) => {
+    columnTotals[column.label] = rows.reduce((sum, row) => sum + toNumber(rawColumnAmount(row, column)), 0);
   });
-  if (!columns.size) {
-    const label = rawMonthLabelFromPeriod(period);
-    if (label) columns.set(label, { key: "__amount_total", label });
-  }
-  return [...columns.values()].sort((a, b) => rawMonthSortValue(a.label) - rawMonthSortValue(b.label));
+  return { __total: true, creditor_hospital: "รวมเจ้าหนี้คงเหลือ", amount_total: total, __columnTotals: columnTotals };
 }
 
-function rawMonthAmount(row, column) {
-  if (column.key === "__amount_total") return row.amount_total;
-  return row[column.key];
+function rawColumnAmount(row, column) {
+  if (row.__total) return row.__columnTotals?.[column.label] || 0;
+  const direct = column.keys.reduce((found, key) => (found !== undefined ? found : row[key]), undefined);
+  if (direct !== undefined && direct !== "") return direct;
+  return rawPeriodColumnLabel(normalizeRawPeriod(row.period)) === column.label ? row.amount_total : 0;
 }
 
-function rawMonthLabel(key) {
-  const text = String(key || "").trim();
-  const match = text.match(/^(ม\.ค|ก\.พ|มี\.ค|เม\.ย|พ\.ค|มิ\.ย|ก\.ค|ส\.ค|ก\.ย|ต\.ค|พ\.ย|ธ\.ค)\.?(25\d{2}|26\d{2})$/);
+function rawPeriodColumnLabel(period) {
+  const match = String(period || "").match(/^(มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม)\s+(25\d{2}|26\d{2})$/);
   if (!match) return "";
-  return `${match[1]}.${String(Number(match[2]) - 2500).padStart(2, "0")}`;
-}
-
-function rawMonthLabelFromPeriod(period) {
-  const normalized = normalizeRawPeriod(period);
-  const match = normalized.match(/^(มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม)\s+(25\d{2}|26\d{2})$/);
-  if (!match) return "ยอดรายเดือน";
   const abbreviations = {
     "มกราคม": "ม.ค.",
     "กุมภาพันธ์": "ก.พ.",
@@ -1022,27 +1042,14 @@ function rawMonthLabelFromPeriod(period) {
     "พฤศจิกายน": "พ.ย.",
     "ธันวาคม": "ธ.ค.",
   };
-  return `${abbreviations[match[1]]}${String(Number(match[2]) - 2500).padStart(2, "0")}`;
+  const spacer = Number(match[2]) >= 2569 && !["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย."].includes(abbreviations[match[1]]) ? " " : "";
+  return `${abbreviations[match[1]]}${spacer}${match[2]}`;
 }
 
-function rawMonthSortValue(label) {
-  const match = String(label || "").match(/^(ม\.ค|ก\.พ|มี\.ค|เม\.ย|พ\.ค|มิ\.ย|ก\.ค|ส\.ค|ก\.ย|ต\.ค|พ\.ย|ธ\.ค)\.(\d{2})$/);
-  if (!match) return 0;
-  const monthOrder = {
-    "ม.ค": 1,
-    "ก.พ": 2,
-    "มี.ค": 3,
-    "เม.ย": 4,
-    "พ.ค": 5,
-    "มิ.ย": 6,
-    "ก.ค": 7,
-    "ส.ค": 8,
-    "ก.ย": 9,
-    "ต.ค": 10,
-    "พ.ย": 11,
-    "ธ.ค": 12,
-  };
-  return Number(match[2]) * 12 + monthOrder[match[1]];
+function rawExcelMoney(value) {
+  const number = toNumber(value);
+  if (Math.abs(number) < 0.005) return "-";
+  return THB.format(number);
 }
 
 function renderLedger() {
@@ -1080,17 +1087,10 @@ function exportRawApCsv() {
   const hospital = document.querySelector("#rawHospitalSelect")?.value || ALL_HOSPITALS_VALUE;
   const query = document.querySelector("#rawApSearch")?.value.trim().toLowerCase() || "";
   const rows = getRawApRows(period, hospital, query);
-  const monthColumns = getRawMonthColumns(rows, period);
-  const csvRows = [["โรงพยาบาลผู้จ่าย", "เจ้าหนี้", ...monthColumns.map((column) => column.label), "รวมเป็นเงิน", "เอกสารอ้างอิง", "หมายเหตุ"]];
-  rows.forEach((row) => {
-    csvRows.push([
-      row.payer_hospital,
-      row.creditor_hospital,
-      ...monthColumns.map((column) => toNumber(rawMonthAmount(row, column))),
-      toNumber(row.amount_total),
-      row.source_doc_ref || row.source_file || "",
-      row.notes || "",
-    ]);
+  const columns = getRawExcelColumns();
+  const csvRows = [["ลำดับ", "ชื่อ รพ. เจ้าหนี้", ...columns.map((column) => column.label), "รวมเป็นเงิน", "หมายเหตุ"]];
+  (rows.length ? [...rows, rawTotalRow(rows)] : []).forEach((row, index) => {
+    csvRows.push(rawExcelRow(row, columns, index).map((cell) => String(cell).replace(/,/g, "")));
   });
   downloadText(`raw-ap-${slug(period)}-${slug(hospital || ALL_HOSPITALS_LABEL)}.csv`, toCsv(csvRows), "text/csv;charset=utf-8");
 }
@@ -1131,8 +1131,8 @@ function renderTable(selector, headers, rows, mapRow, numericIndexes = [], rawIn
     .join("");
   const bodyHtml = rows.length
     ? rows
-        .map((row) => {
-          return `<tr>${mapRow(row)
+        .map((row, rowIndex) => {
+          return `<tr>${mapRow(row, rowIndex)
             .map((cell, index) => {
               const value = rawIndexes.includes(index) ? cell : escapeHtml(cell);
               return `<td class="${numericIndexes.includes(index) ? "num" : ""}">${value}</td>`;

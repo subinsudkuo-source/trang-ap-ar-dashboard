@@ -3,8 +3,9 @@
     return;
   }
 
-  const DEFAULT_MONTHLY_PERIOD = "";
+  const DEFAULT_MONTHLY_PERIOD = "กรกฎาคม 2569";
   const originalBackendSaveMonthlyEntries = backendSaveMonthlyEntries;
+  const fallback = window.JULY_2569_FALLBACK || null;
   const TRIAL_BALANCE_OVERRIDES = {
     "มิถุนายน 2569": [
       { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.ตรัง", amount: 50281525 },
@@ -35,7 +36,7 @@
       document.querySelector("#periodSelect")?.addEventListener("change", (event) => {
         refreshDashboardForMonthlyPeriod({ period: event.target.value });
       });
-      refreshDashboardForMonthlyPeriod({ period: state.data?.period || document.querySelector("#periodSelect")?.value || document.querySelector("#entryPeriod")?.value || DEFAULT_MONTHLY_PERIOD });
+      refreshDashboardForMonthlyPeriod({ period: DEFAULT_MONTHLY_PERIOD || state.data?.period || document.querySelector("#periodSelect")?.value || document.querySelector("#entryPeriod")?.value });
     });
   });
 
@@ -58,7 +59,7 @@
   }
 
   async function refreshDashboardForMonthlyPeriod(payload) {
-    const period = payload.period || state.data?.period || document.querySelector("#periodSelect")?.value || document.querySelector("#entryPeriod")?.value || DEFAULT_MONTHLY_PERIOD;
+    const period = payload.period || DEFAULT_MONTHLY_PERIOD || state.data?.period || document.querySelector("#periodSelect")?.value || document.querySelector("#entryPeriod")?.value;
     if (!period) return;
 
     try {
@@ -70,10 +71,9 @@
         if (!result?.ok) return;
         records = (result.records || []).filter((record) => normalizePeriod(record.period) === period);
       }
-      if (!records.length) return;
-      applyMonthlyDashboard(period, records);
+      applyMonthlyDashboard(period, completeMonthlyRecords(period, records));
     } catch {
-      // Keep the normal save status visible if the dashboard refresh fails.
+      applyMonthlyDashboard(period, completeMonthlyRecords(period, []));
     }
   }
 
@@ -92,7 +92,7 @@
       amount_total: amount(record.ap_amount),
       "รวมเป็นเงิน": amount(record.ap_amount),
     }));
-    const trialRows = mergeTrialBalanceOverrides(state.data?.trial_balance_rows || [], period);
+    const trialRows = completeTrialRows(period, mergeTrialBalanceOverrides(state.data?.trial_balance_rows || [], period));
     const trialTotals = getTrialTotals(trialRows, period);
 
     state.data = {
@@ -112,6 +112,48 @@
 
     syncControls(period, payloadPayer(records));
     renderAll();
+  }
+
+  function completeMonthlyRecords(period, records) {
+    const normalizedPeriod = normalizePeriod(period);
+    const fallbackRecords = fallback?.period === normalizedPeriod ? fallback.monthlyRecords || [] : [];
+    if (!fallbackRecords.length) {
+      return (records || []).filter((record) => normalizePeriod(record.period) === normalizedPeriod);
+    }
+
+    const byKey = new Map();
+    fallbackRecords.forEach((record) => {
+      byKey.set(monthlyKey(record), { ...record, period: normalizedPeriod });
+    });
+    (records || [])
+      .filter((record) => normalizePeriod(record.period) === normalizedPeriod)
+      .forEach((record) => {
+        byKey.set(monthlyKey(record), { ...record, period: normalizedPeriod });
+      });
+    return [...byKey.values()];
+  }
+
+  function completeTrialRows(period, rows) {
+    const normalizedPeriod = normalizePeriod(period);
+    const fallbackRows = fallback?.period === normalizedPeriod ? fallback.trialBalanceRows || [] : [];
+    const byKey = new Map();
+    fallbackRows.forEach((row) => {
+      byKey.set(trialKey(row), { ...row, period: normalizedPeriod });
+    });
+    (rows || [])
+      .filter((row) => normalizePeriod(row.period) === normalizedPeriod)
+      .forEach((row) => {
+        byKey.set(trialKey(row), { ...row, period: normalizedPeriod });
+      });
+    return [...byKey.values()];
+  }
+
+  function monthlyKey(record) {
+    return [normalizePeriod(record.period), record.payer_hospital, record.creditor_hospital].join("|");
+  }
+
+  function trialKey(row) {
+    return [normalizePeriod(row.period), row.hospital, row.account_code || row["Account Code"]].join("|");
   }
 
   function collectHospitals(records) {

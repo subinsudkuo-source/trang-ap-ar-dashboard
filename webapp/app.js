@@ -143,6 +143,8 @@ function setupControls() {
   fillSelect("#entryPeriod", monthOptions, "พฤษภาคม 2569");
   fillSelect("#entryPayer", state.data.hospitals, state.data.hospitals[0]);
   fillSelect("#trialUploadPeriod", [state.data.period, ...monthOptions.filter((m) => m !== state.data.period)], state.data.period);
+  fillSelect("#rawPeriodSelect", [state.data.period, ...monthOptions.filter((m) => m !== state.data.period)], state.data.period);
+  fillSelect("#rawHospitalSelect", [ALL_HOSPITALS_VALUE, ...state.data.hospitals], ALL_HOSPITALS_VALUE);
 
   updateSourceLine();
   setupBackendControls();
@@ -171,6 +173,9 @@ function setupControls() {
   document.querySelector("#reconcileStatus").addEventListener("change", renderReconcile);
   document.querySelector("#reconcileSearch").addEventListener("input", renderReconcile);
   document.querySelector("#ledgerSearch").addEventListener("input", renderLedger);
+  document.querySelector("#rawPeriodSelect")?.addEventListener("change", syncRawPeriod);
+  document.querySelector("#rawHospitalSelect")?.addEventListener("change", renderRawAp);
+  document.querySelector("#rawApSearch")?.addEventListener("input", renderRawAp);
   document.querySelector("#entryPeriod").addEventListener("change", renderMonthly);
   document.querySelector("#entryPayer").addEventListener("change", (event) => {
     state.selectedHospital = event.target.value;
@@ -189,6 +194,7 @@ function setupControls() {
   document.querySelector("#exportMonthlyCsv").addEventListener("click", exportMonthlyCsv);
   document.querySelector("#exportMonthlyJson").addEventListener("click", exportMonthlyJson);
   document.querySelector("#exportTrangCsv").addEventListener("click", exportTrangCsv);
+  document.querySelector("#exportRawApCsv")?.addEventListener("click", exportRawApCsv);
 }
 
 function setupBackendControls() {
@@ -268,6 +274,7 @@ function renderAll() {
   if (state.view === "reconcile") renderReconcile();
   if (state.view === "monthly") renderMonthly();
   if (state.view === "matrix") renderMatrix();
+  if (state.view === "rawAp") renderRawAp();
   if (state.view === "ledger") renderLedger();
 }
 
@@ -884,6 +891,90 @@ function renderMatrix() {
   document.querySelector("#matrixTable").innerHTML = `<thead>${header}</thead><tbody>${body}</tbody>`;
 }
 
+function syncRawPeriod() {
+  const period = document.querySelector("#rawPeriodSelect")?.value || getSelectedPeriod();
+  const periodSelect = document.querySelector("#periodSelect");
+  if (periodSelect && periodSelect.value !== period) {
+    periodSelect.value = period;
+    periodSelect.dispatchEvent(new Event("change"));
+  }
+  renderRawAp();
+}
+
+function renderRawAp() {
+  syncRawFilterOptions();
+  const period = document.querySelector("#rawPeriodSelect")?.value || getSelectedPeriod();
+  const hospital = document.querySelector("#rawHospitalSelect")?.value || ALL_HOSPITALS_VALUE;
+  const query = document.querySelector("#rawApSearch")?.value.trim().toLowerCase() || "";
+  const rows = getRawApRows(period, hospital, query);
+  const total = rows.reduce((sum, row) => sum + toNumber(row.amount_total), 0);
+  const payerCount = new Set(rows.map((row) => row.payer_hospital)).size;
+  const creditorCount = new Set(rows.map((row) => row.creditor_hospital)).size;
+
+  document.querySelector("#rawApSummary").innerHTML = [
+    summaryPill("งวดบัญชี", period || "-"),
+    summaryPill("โรงพยาบาล", hospital || ALL_HOSPITALS_LABEL),
+    summaryPill("จำนวนรายการ", `${rows.length} รายการ`),
+    summaryPill("ยอดรวมเจ้าหนี้", money(total)),
+    summaryPill("ผู้จ่าย", `${payerCount} รพ.`),
+    summaryPill("เจ้าหนี้", `${creditorCount} รพ.`),
+  ].join("");
+
+  renderTable(
+    "#rawApTable",
+    ["งวดบัญชี", "โรงพยาบาลผู้จ่าย", "เจ้าหนี้", "ยอดเจ้าหนี้", "เอกสารอ้างอิง", "สถานะ", "หมายเหตุ"],
+    rows,
+    (row) => [
+      normalizeRawPeriod(row.period),
+      row.payer_hospital,
+      row.creditor_hospital,
+      money(row.amount_total),
+      row.source_doc_ref || row.source_file || "",
+      row.review_status || "",
+      row.notes || "",
+    ],
+    [3],
+  );
+}
+
+function syncRawFilterOptions() {
+  const periodSelect = document.querySelector("#rawPeriodSelect");
+  const hospitalSelect = document.querySelector("#rawHospitalSelect");
+  if (!periodSelect || !hospitalSelect) return;
+
+  const selectedPeriod = periodSelect.value || getSelectedPeriod();
+  const selectedHospital = hospitalSelect.value || ALL_HOSPITALS_VALUE;
+  const periodValues = [getSelectedPeriod(), ...monthOptions].filter(Boolean);
+  fillSelect("#rawPeriodSelect", [...new Set(periodValues)], selectedPeriod);
+  fillSelect("#rawHospitalSelect", [ALL_HOSPITALS_VALUE, ...state.data.hospitals], selectedHospital);
+}
+
+function getRawApRows(period, hospital, query) {
+  const normalizedPeriod = normalizeRawPeriod(period);
+  return (state.data.ledger_rows || [])
+    .filter((row) => normalizeRawPeriod(row.period) === normalizedPeriod)
+    .filter((row) => !hospital || row.payer_hospital === hospital)
+    .filter((row) => {
+      if (!query) return true;
+      return [
+        row.payer_hospital,
+        row.creditor_hospital,
+        row.source_doc_ref,
+        row.source_file,
+        row.review_status,
+        row.notes,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    })
+    .sort((a, b) => {
+      const payerSort = String(a.payer_hospital || "").localeCompare(String(b.payer_hospital || ""), "th");
+      if (payerSort) return payerSort;
+      return toNumber(b.amount_total) - toNumber(a.amount_total);
+    });
+}
+
 function renderLedger() {
   const selected = getSelectedHospital();
   const query = document.querySelector("#ledgerSearch").value.trim().toLowerCase();
@@ -912,6 +1003,26 @@ function renderLedger() {
     ],
     [2, 3, 4, 5, 6, 7, 8, 9],
   );
+}
+
+function exportRawApCsv() {
+  const period = document.querySelector("#rawPeriodSelect")?.value || getSelectedPeriod();
+  const hospital = document.querySelector("#rawHospitalSelect")?.value || ALL_HOSPITALS_VALUE;
+  const query = document.querySelector("#rawApSearch")?.value.trim().toLowerCase() || "";
+  const rows = getRawApRows(period, hospital, query);
+  const csvRows = [["งวดบัญชี", "โรงพยาบาลผู้จ่าย", "เจ้าหนี้", "ยอดเจ้าหนี้", "เอกสารอ้างอิง", "สถานะ", "หมายเหตุ"]];
+  rows.forEach((row) => {
+    csvRows.push([
+      normalizeRawPeriod(row.period),
+      row.payer_hospital,
+      row.creditor_hospital,
+      toNumber(row.amount_total),
+      row.source_doc_ref || row.source_file || "",
+      row.review_status || "",
+      row.notes || "",
+    ]);
+  });
+  downloadText(`raw-ap-${slug(period)}-${slug(hospital || ALL_HOSPITALS_LABEL)}.csv`, toCsv(csvRows), "text/csv;charset=utf-8");
 }
 
 function renderBarChart(selector, rows, options) {
@@ -1273,6 +1384,52 @@ function wholeMoney(value) {
   const number = Math.round(toNumber(value));
   if (!number) return "-";
   return number < 0 ? `(${THB0.format(Math.abs(number))})` : THB0.format(number);
+}
+
+function normalizeRawPeriod(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (monthOptions.includes(text)) return text;
+
+  const date = new Date(text);
+  if (!Number.isNaN(date.getTime())) {
+    const rawYear = date.getFullYear();
+    const buddhistYear = rawYear >= 2400 ? rawYear : rawYear + 543;
+    return `${[
+      "มกราคม",
+      "กุมภาพันธ์",
+      "มีนาคม",
+      "เมษายน",
+      "พฤษภาคม",
+      "มิถุนายน",
+      "กรกฎาคม",
+      "สิงหาคม",
+      "กันยายน",
+      "ตุลาคม",
+      "พฤศจิกายน",
+      "ธันวาคม",
+    ][date.getMonth()]} ${buddhistYear}`;
+  }
+
+  const thaiDate = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](25\d{2}|26\d{2})$/);
+  if (thaiDate) {
+    return `${[
+      "มกราคม",
+      "กุมภาพันธ์",
+      "มีนาคม",
+      "เมษายน",
+      "พฤษภาคม",
+      "มิถุนายน",
+      "กรกฎาคม",
+      "สิงหาคม",
+      "กันยายน",
+      "ตุลาคม",
+      "พฤศจิกายน",
+      "ธันวาคม",
+    ][Number(thaiDate[2]) - 1]} ${thaiDate[3]}`;
+  }
+
+  return text;
 }
 
 function shortHospital(name) {

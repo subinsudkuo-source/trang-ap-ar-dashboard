@@ -1022,7 +1022,14 @@ function rawColumnAmount(row, column) {
   if (row.__total) return row.__columnTotals?.[column.label] || 0;
   const direct = column.keys.reduce((found, key) => (found !== undefined ? found : row[key]), undefined);
   if (direct !== undefined && direct !== "") return direct;
+  if (hasRawExcelDetails(row)) return 0;
   return rawPeriodColumnLabel(normalizeRawPeriod(row.period)) === column.label ? row.amount_total : 0;
+}
+
+function hasRawExcelDetails(row) {
+  return getRawExcelColumns().some((column) =>
+    column.keys.some((key) => row[key] !== undefined && row[key] !== "" && Math.abs(toNumber(row[key])) >= 0.005)
+  );
 }
 
 function rawPeriodColumnLabel(period) {

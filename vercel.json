@@ -24,6 +24,10 @@
     {
       "source": "/data.example.js",
       "destination": "/webapp/data.example.js"
+    },
+    {
+      "source": "/july-2569-data.js",
+      "destination": "/webapp/july-2569-data.js"
     }
   ]
 }

@@ -912,9 +912,8 @@ function renderRawAp() {
   const payerCount = new Set(rows.map((row) => row.payer_hospital)).size;
   const creditorCount = new Set(rows.map((row) => row.creditor_hospital)).size;
   const columns = getRawExcelColumns();
-  const showPayerColumn = !hospital;
-  const headers = ["ลำดับ", ...(showPayerColumn ? ["รพ.รายงาน"] : []), "ชื่อ รพ. เจ้าหนี้", ...columns.map((column) => column.label), "รวมเป็นเงิน", "หมายเหตุ"];
-  const numericOffset = showPayerColumn ? 3 : 2;
+  const headers = ["รพ.ผู้รายงาน (ลูกหนี้)", "รพ.เจ้าหนี้", ...columns.map((column) => column.label), "รวมเป็นเงิน", "ไฟล์ต้นทาง", "ชีตต้นทาง"];
+  const numericOffset = 2;
   const numericIndexes = columns.map((_, index) => index + numericOffset).concat(numericOffset + columns.length);
   const selectedHospitalLabel = hospital || (payerCount === 1 ? rows[0]?.payer_hospital : ALL_HOSPITALS_LABEL);
 
@@ -938,7 +937,7 @@ function renderRawAp() {
     "#rawApTable",
     headers,
     rows.length ? [...rows, rawTotalRow(rows)] : [],
-    (row, index) => rawExcelRow(row, columns, index, showPayerColumn),
+    (row) => rawExcelRow(row, columns),
     numericIndexes,
   );
   renderRawApFootnotes(rows, total, extraTotal);
@@ -1027,36 +1026,36 @@ function getRawApRows(period, hospital, query) {
 
 function getRawExcelColumns() {
   return [
-    { label: "เจ้าหนี้ปีงบ 2565", keys: ["เจ้าหนี้ปีงบ 2565", "เจ้าหนี้ปีงบ2565"] },
-    { label: "เจ้าหนี้ปีงบ 2566", keys: ["เจ้าหนี้ปีงบ 2566", "เจ้าหนี้ปีงบ2566"] },
-    { label: "เจ้าหนี้งบ 2567", keys: ["เจ้าหนี้งบ 2567", "เจ้าหนี้ปีงบ 2567", "เจ้าหนี้งบ2567"] },
-    { label: "เจ้าหนี้งบ 2568", keys: ["เจ้าหนี้งบ 2568", "เจ้าหนี้ปีงบ 2568", "เจ้าหนี้งบ2568"] },
-    { label: "ไตรมาส 2/2568 OP Anywhere", keys: ["ไตรมาส 2/2568 OP Anywhere", "ไตรมาส2/2568OPAnywhere"] },
-    { label: "ต.ค.2568", keys: ["ต.ค.2568", "ต.ค.68"] },
-    { label: "พ.ย.2568", keys: ["พ.ย.2568", "พ.ย.68"] },
-    { label: "ธ.ค.2568", keys: ["ธ.ค.2568", "ธ.ค.68"] },
-    { label: "ม.ค.2569", keys: ["ม.ค.2569", "ม.ค.69"] },
-    { label: "ก.พ.2569", keys: ["ก.พ.2569", "ก.พ.69"] },
-    { label: "มี.ค.2569", keys: ["มี.ค.2569", "มี.ค.69"] },
-    { label: "เม.ย.2569", keys: ["เม.ย.2569", "เม.ย.69"] },
-    { label: "พ.ค. 2569", keys: ["พ.ค.2569", "พ.ค. 2569", "พ.ค.69"] },
-    { label: "มิ.ย. 2569", keys: ["มิ.ย.2569", "มิ.ย. 2569", "มิ.ย.69"] },
-    { label: "ไตรมาส 3/2568 OP Anywhere", keys: ["ไตรมาส 3/2568 OP Anywhere", "ไตรมาส3/2568OPAnywhere"] },
-    { label: "ก.ค. 2569", keys: ["ก.ค.2569", "ก.ค. 2569", "ก.ค.69"] },
-    { label: "ส.ค. 2569", keys: ["ส.ค.2569", "ส.ค. 2569", "ส.ค.69"] },
-    { label: "ก.ย. 2569", keys: ["ก.ย.2569", "ก.ย. 2569", "ก.ย.69"] },
+    { label: "ก่อนปีงบ 2566/ไม่ระบุ", keys: ["ก่อนปีงบ 2566/ไม่ระบุ", "เจ้าหนี้ปีงบ 2565", "เจ้าหนี้ปีงบ2565"] },
+    { label: "ปีงบ 2566", keys: ["ปีงบ 2566", "เจ้าหนี้ปีงบ 2566", "เจ้าหนี้ปีงบ2566"] },
+    { label: "ปีงบ 2567", keys: ["ปีงบ 2567", "เจ้าหนี้งบ 2567", "เจ้าหนี้ปีงบ 2567", "เจ้าหนี้งบ2567"] },
+    { label: "ปีงบ 2568", keys: ["ปีงบ 2568", "เจ้าหนี้งบ 2568", "เจ้าหนี้ปีงบ 2568", "เจ้าหนี้งบ2568"] },
+    { label: "OP Anywhere ไตรมาส 2/2568", keys: ["OP Anywhere ไตรมาส 2/2568", "ไตรมาส 2/2568 OP Anywhere", "ไตรมาส2/2568OPAnywhere"] },
+    { label: "ต.ค. 2568", keys: ["ต.ค. 2568", "ต.ค.2568", "ต.ค.68"] },
+    { label: "พ.ย. 2568", keys: ["พ.ย. 2568", "พ.ย.2568", "พ.ย.68"] },
+    { label: "ธ.ค. 2568", keys: ["ธ.ค. 2568", "ธ.ค.2568", "ธ.ค.68"] },
+    { label: "ม.ค. 2569", keys: ["ม.ค. 2569", "ม.ค.2569", "ม.ค.69"] },
+    { label: "ก.พ. 2569", keys: ["ก.พ. 2569", "ก.พ.2569", "ก.พ.69"] },
+    { label: "มี.ค. 2569", keys: ["มี.ค. 2569", "มี.ค.2569", "มี.ค.69"] },
+    { label: "เม.ย. 2569", keys: ["เม.ย. 2569", "เม.ย.2569", "เม.ย.69"] },
+    { label: "พ.ค. 2569", keys: ["พ.ค. 2569", "พ.ค.2569", "พ.ค.69"] },
+    { label: "มิ.ย. 2569", keys: ["มิ.ย. 2569", "มิ.ย.2569", "มิ.ย.69"] },
+    { label: "OP Anywhere ไตรมาส 3/2568", keys: ["OP Anywhere ไตรมาส 3/2568", "ไตรมาส 3/2568 OP Anywhere", "ไตรมาส3/2568OPAnywhere"] },
+    { label: "ก.ค. 2569", keys: ["ก.ค. 2569", "ก.ค.2569", "ก.ค.69"] },
+    { label: "ส.ค. 2569", keys: ["ส.ค. 2569", "ส.ค.2569", "ส.ค.69"] },
+    { label: "ก.ย. 2569", keys: ["ก.ย. 2569", "ก.ย.2569", "ก.ย.69"] },
   ];
 }
 
-function rawExcelRow(row, columns, index, showPayerColumn = false) {
+function rawExcelRow(row, columns) {
   const isTotal = row.__total;
   return [
-    isTotal ? "" : index + 1,
-    ...(showPayerColumn ? [isTotal ? "รวมทั้งจังหวัด" : row.payer_hospital] : []),
-    isTotal ? "รวมเจ้าหนี้คงเหลือ" : row.creditor_hospital,
+    isTotal ? "รวมเจ้าหนี้" : shortHospital(row.payer_hospital),
+    isTotal ? "" : shortHospital(row.creditor_hospital),
     ...columns.map((column) => rawExcelMoney(rawColumnAmount(row, column))),
     rawExcelMoney(row.amount_total),
-    isTotal ? "" : row.notes || "",
+    isTotal ? "" : row.source_file || row.source_doc_ref || "",
+    isTotal ? "" : row.source_sheet || "",
   ];
 }
 
@@ -1146,10 +1145,9 @@ function exportRawApCsv() {
   const query = document.querySelector("#rawApSearch")?.value.trim().toLowerCase() || "";
   const rows = getRawApRows(period, hospital, query);
   const columns = getRawExcelColumns();
-  const showPayerColumn = !hospital;
-  const csvRows = [["ลำดับ", ...(showPayerColumn ? ["รพ.รายงาน"] : []), "ชื่อ รพ. เจ้าหนี้", ...columns.map((column) => column.label), "รวมเป็นเงิน", "หมายเหตุ"]];
+  const csvRows = [["รพ.ผู้รายงาน (ลูกหนี้)", "รพ.เจ้าหนี้", ...columns.map((column) => column.label), "รวมเป็นเงิน", "ไฟล์ต้นทาง", "ชีตต้นทาง"]];
   (rows.length ? [...rows, rawTotalRow(rows)] : []).forEach((row, index) => {
-    csvRows.push(rawExcelRow(row, columns, index, showPayerColumn).map((cell) => String(cell).replace(/,/g, "")));
+    csvRows.push(rawExcelRow(row, columns, index).map((cell) => String(cell).replace(/,/g, "")));
   });
   downloadText(`raw-ap-${slug(period)}-${slug(hospital || ALL_HOSPITALS_LABEL)}.csv`, toCsv(csvRows), "text/csv;charset=utf-8");
 }

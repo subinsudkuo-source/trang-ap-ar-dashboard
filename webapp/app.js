@@ -908,6 +908,7 @@ function renderRawAp() {
   const query = document.querySelector("#rawApSearch")?.value.trim().toLowerCase() || "";
   const rows = getRawApRows(period, hospital, query);
   const total = rows.reduce((sum, row) => sum + toNumber(row.amount_total), 0);
+  const extraTotal = rows.reduce((sum, row) => sum + toNumber(row.raw_extra_amount), 0);
   const payerCount = new Set(rows.map((row) => row.payer_hospital)).size;
   const creditorCount = new Set(rows.map((row) => row.creditor_hospital)).size;
   const columns = getRawExcelColumns();
@@ -926,6 +927,7 @@ function renderRawAp() {
     summaryPill("โรงพยาบาล", hospital || ALL_HOSPITALS_LABEL),
     summaryPill("จำนวนรายการ", `${rows.length} รายการ`),
     summaryPill("ยอดรวมเจ้าหนี้", money(total)),
+    ...(extraTotal ? [summaryPill("ยอดประกอบหมายเหตุ", money(extraTotal)), summaryPill("รวมตามไฟล์", money(total + extraTotal))] : []),
     summaryPill("ผู้จ่าย", `${payerCount} รพ.`),
     summaryPill("เจ้าหนี้", `${creditorCount} รพ.`),
   ].join("");

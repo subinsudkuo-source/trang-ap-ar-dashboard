@@ -912,8 +912,10 @@ function renderRawAp() {
   const payerCount = new Set(rows.map((row) => row.payer_hospital)).size;
   const creditorCount = new Set(rows.map((row) => row.creditor_hospital)).size;
   const columns = getRawExcelColumns();
-  const headers = ["ลำดับ", "ชื่อ รพ. เจ้าหนี้", ...columns.map((column) => column.label), "รวมเป็นเงิน", "หมายเหตุ"];
-  const numericIndexes = columns.map((_, index) => index + 2).concat(2 + columns.length);
+  const showPayerColumn = !hospital;
+  const headers = ["ลำดับ", ...(showPayerColumn ? ["รพ.รายงาน"] : []), "ชื่อ รพ. เจ้าหนี้", ...columns.map((column) => column.label), "รวมเป็นเงิน", "หมายเหตุ"];
+  const numericOffset = showPayerColumn ? 3 : 2;
+  const numericIndexes = columns.map((_, index) => index + numericOffset).concat(numericOffset + columns.length);
   const selectedHospitalLabel = hospital || (payerCount === 1 ? rows[0]?.payer_hospital : ALL_HOSPITALS_LABEL);
 
   document.querySelector("#rawApReportHeading").innerHTML = `
@@ -936,7 +938,7 @@ function renderRawAp() {
     "#rawApTable",
     headers,
     rows.length ? [...rows, rawTotalRow(rows)] : [],
-    (row, index) => rawExcelRow(row, columns, index),
+    (row, index) => rawExcelRow(row, columns, index, showPayerColumn),
     numericIndexes,
   );
   renderRawApFootnotes(rows, total, extraTotal);
@@ -1046,10 +1048,11 @@ function getRawExcelColumns() {
   ];
 }
 
-function rawExcelRow(row, columns, index) {
+function rawExcelRow(row, columns, index, showPayerColumn = false) {
   const isTotal = row.__total;
   return [
     isTotal ? "" : index + 1,
+    ...(showPayerColumn ? [isTotal ? "รวมทั้งจังหวัด" : row.payer_hospital] : []),
     isTotal ? "รวมเจ้าหนี้คงเหลือ" : row.creditor_hospital,
     ...columns.map((column) => rawExcelMoney(rawColumnAmount(row, column))),
     rawExcelMoney(row.amount_total),
@@ -1143,9 +1146,10 @@ function exportRawApCsv() {
   const query = document.querySelector("#rawApSearch")?.value.trim().toLowerCase() || "";
   const rows = getRawApRows(period, hospital, query);
   const columns = getRawExcelColumns();
-  const csvRows = [["ลำดับ", "ชื่อ รพ. เจ้าหนี้", ...columns.map((column) => column.label), "รวมเป็นเงิน", "หมายเหตุ"]];
+  const showPayerColumn = !hospital;
+  const csvRows = [["ลำดับ", ...(showPayerColumn ? ["รพ.รายงาน"] : []), "ชื่อ รพ. เจ้าหนี้", ...columns.map((column) => column.label), "รวมเป็นเงิน", "หมายเหตุ"]];
   (rows.length ? [...rows, rawTotalRow(rows)] : []).forEach((row, index) => {
-    csvRows.push(rawExcelRow(row, columns, index).map((cell) => String(cell).replace(/,/g, "")));
+    csvRows.push(rawExcelRow(row, columns, index, showPayerColumn).map((cell) => String(cell).replace(/,/g, "")));
   });
   downloadText(`raw-ap-${slug(period)}-${slug(hospital || ALL_HOSPITALS_LABEL)}.csv`, toCsv(csvRows), "text/csv;charset=utf-8");
 }

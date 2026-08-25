@@ -939,6 +939,49 @@ function renderRawAp() {
     (row, index) => rawExcelRow(row, columns, index),
     numericIndexes,
   );
+  renderRawApFootnotes(rows, total, extraTotal);
+}
+
+function renderRawApFootnotes(rows, total, extraTotal) {
+  const target = document.querySelector("#rawApFootnotes");
+  if (!target) return;
+  const notes = rows
+    .filter((row) => toNumber(row.raw_extra_amount) || row.raw_extra_note)
+    .map((row) => ({
+      label: row.raw_extra_note || row.notes || row.creditor_hospital,
+      amount: toNumber(row.raw_extra_amount),
+    }));
+
+  if (!notes.length) {
+    target.innerHTML = "";
+    return;
+  }
+
+  target.innerHTML = `
+    <div class="raw-note-title">หมายเหตุ ช่องรวมเป็นเงินต้องเท่ากับจำนวนเงินในรหัส 2101020199.202 เจ้าหนี้ค่ารักษา OP-UC นอก CUP ณ สิ้นเดือนนั้นๆ</div>
+    <table>
+      <tbody>
+        ${notes
+          .map(
+            (note) => `
+              <tr>
+                <th>${escapeHtml(note.label)}</th>
+                <td>${rawExcelMoney(note.amount)}</td>
+              </tr>
+            `,
+          )
+          .join("")}
+        <tr>
+          <th>รวมเป็นเงิน</th>
+          <td>${rawExcelMoney(total)}</td>
+        </tr>
+        <tr>
+          <th>รวม</th>
+          <td>${rawExcelMoney(total + extraTotal)}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
 }
 
 function syncRawFilterOptions() {

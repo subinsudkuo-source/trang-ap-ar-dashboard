@@ -487,6 +487,41 @@ tbody tr:hover {
   font-weight: 800;
 }
 
+.raw-footnotes {
+  margin-top: 18px;
+  font-size: 0.78rem;
+}
+
+.raw-footnotes:empty {
+  display: none;
+}
+
+.raw-note-title {
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.raw-footnotes table {
+  min-width: 420px;
+  border-collapse: collapse;
+}
+
+.raw-footnotes th,
+.raw-footnotes td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #1f2937;
+}
+
+.raw-footnotes th {
+  min-width: 260px;
+  text-align: left;
+}
+
+.raw-footnotes td {
+  min-width: 120px;
+  text-align: right;
+}
+
 .backend-bar {
   display: grid;
   grid-template-columns: minmax(280px, 1fr) auto minmax(180px, auto);

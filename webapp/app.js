@@ -973,9 +973,10 @@ function getRawApRows(period, hospital, query) {
         .includes(query);
     })
     .sort((a, b) => {
-      const payerSort = String(a.payer_hospital || "").localeCompare(String(b.payer_hospital || ""), "th");
+      const hospitalOrder = new Map((state.data?.hospitals || []).map((name, index) => [name, index]));
+      const payerSort = (hospitalOrder.get(a.payer_hospital) ?? 999) - (hospitalOrder.get(b.payer_hospital) ?? 999);
       if (payerSort) return payerSort;
-      return toNumber(b.amount_total) - toNumber(a.amount_total);
+      return (hospitalOrder.get(a.creditor_hospital) ?? 999) - (hospitalOrder.get(b.creditor_hospital) ?? 999);
     });
 }
 

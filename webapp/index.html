@@ -81,6 +81,20 @@
               <table id="trangCompareTable"></table>
             </div>
           </section>
+          <section class="panel" id="trangMonthlyPanel">
+            <div class="panel-heading">
+              <div>
+                <h2 id="trangMonthlyTitle">รพ.ตรังเป็นหนี้ รพช. แยกตามเดือนที่เกิดหนี้</h2>
+                <p class="panel-note">ยอดคงค้าง ณ งวดที่เลือก จำแนกตามเดือนของรายการที่ยังไม่ได้ชำระ</p>
+              </div>
+              <span class="badge" id="trangMonthlyPeriod"></span>
+            </div>
+            <div class="monthly-summary" id="trangMonthlySummary"></div>
+            <div id="trangMonthlyChart" class="chart-box chart-aging"></div>
+            <div class="table-wrap aging-table-wrap">
+              <table id="trangMonthlyTable"></table>
+            </div>
+          </section>
         </section>
 
         <section class="view" id="reconcileView" data-view="reconcile">
@@ -249,6 +263,7 @@
     <script src="./data.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="./app.js"></script>
+    <script src="./august-2569-data.js"></script>
     <script src="./july-2569-data.js"></script>
     <script src="./monthly-refresh-hotfix.js"></script>
   </body>

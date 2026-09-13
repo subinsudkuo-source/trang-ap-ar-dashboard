@@ -70,9 +70,6 @@ async function init() {
   try {
     await loadRuntimeConfig();
     const bootstrap = await loadBootstrapData();
-    if (state.backendUrl && !bootstrap?.dashboardData && !isFileRuntime()) {
-      throw new Error("เชื่อม Apps Script ไม่สำเร็จ กรุณาตรวจ Deploy Web App และ APPS_SCRIPT_WEB_APP_URL");
-    }
     state.data = bootstrap?.dashboardData || window.DASHBOARD_DATA || (await fetchDashboardData());
     state.dataSource = bootstrap?.dashboardData ? "sheet" : "local";
     if (bootstrap?.monthlyEntries?.records) {
@@ -256,7 +253,8 @@ function updateSourceLine() {
     sourceLine.textContent = `แหล่งข้อมูล: ${sourceName} · งวด ${selectedPeriod}`;
     return;
   }
-  sourceLine.textContent = `แหล่งข้อมูล: ไฟล์ตัวอย่าง/ไฟล์ local · งวด ${selectedPeriod}`;
+  const localSource = state.data.source === "AugustFiles" ? "ไฟล์ทะเบียนและงบทดลอง ส.ค.69" : "ไฟล์ตัวอย่าง/ไฟล์ local";
+  sourceLine.textContent = `แหล่งข้อมูล: ${localSource} · งวด ${selectedPeriod}`;
 }
 
 function getSelectedPeriod() {
@@ -416,6 +414,82 @@ function renderTrangView() {
     money(row.counterparty_payable_to_selected),
     money(row.net_for_selected),
   ], [1, 2, 3]);
+  renderTrangPayableMonthly();
+}
+
+function renderTrangPayableMonthly() {
+  const payer = isAllHospitals() ? DEFAULT_HOSPITAL : getSelectedHospital();
+  const period = getSelectedPeriod();
+  const periodRows = getPayableAgingRows(payer, period);
+  const columns = getRawExcelColumns();
+  const totals = columns.map((column) => ({
+    label: column.label,
+    amount: periodRows.reduce((acc, row) => acc + toNumber(rawColumnAmount(row, column)), 0),
+  }));
+  const total = periodRows.reduce((acc, row) => acc + toNumber(row.amount_total ?? row.ap_amount), 0);
+  const peak = totals.reduce((best, row) => row.amount > best.amount ? row : best, { label: "-", amount: 0 });
+  const currentColumn = rawPeriodColumnLabel(normalizeRawPeriod(period));
+  const beforeCurrent = totals.filter((row) => row.label !== currentColumn).reduce((acc, row) => acc + row.amount, 0);
+
+  document.querySelector("#trangMonthlyTitle").textContent = `${payer}เป็นหนี้โรงพยาบาลอื่น แยกตามเดือนที่เกิดหนี้`;
+  document.querySelector("#trangMonthlyPeriod").textContent = `ณ ${period}`;
+  document.querySelector("#trangMonthlySummary").innerHTML = [
+    summaryPill("ยอดคงค้างรวม", money(total)),
+    summaryPill("เดือนที่มียอดสูงสุด", `${peak.label} · ${money(peak.amount)}`),
+    summaryPill("ยอดก่อนเดือนปัจจุบัน", money(beforeCurrent)),
+    summaryPill("สัดส่วนเดือนสูงสุด", total ? `${((peak.amount / total) * 100).toFixed(1)}%` : "-"),
+  ].join("");
+
+  renderBarChart("#trangMonthlyChart", totals, {
+    labelKey: "label",
+    valueKey: "amount",
+    color: "#c7483c",
+    maxRows: totals.length,
+  });
+  renderPayableAgingTable(periodRows, columns);
+}
+
+function getPayableAgingRows(payer, period) {
+  const normalizedPeriod = normalizeRawPeriod(period);
+  const rows = (state.data.ledger_rows || []).filter((row) =>
+    row.payer_hospital === payer &&
+    row.creditor_hospital !== payer &&
+    normalizeRawPeriod(row.period) === normalizedPeriod
+  );
+  if (rows.some(hasRawExcelDetails)) return rows;
+
+  const fallbackRows = window.AUGUST_2569_FALLBACK?.period === normalizedPeriod
+    ? window.AUGUST_2569_FALLBACK.monthlyRecords || []
+    : [];
+  return fallbackRows.filter((row) => row.payer_hospital === payer && row.creditor_hospital !== payer);
+}
+
+function renderPayableAgingTable(rows, columns) {
+  const activeColumns = columns.filter((column) =>
+    rows.some((row) => Math.abs(toNumber(rawColumnAmount(row, column))) >= 0.005)
+  );
+  const displayColumns = activeColumns.length ? activeColumns : columns;
+  const totalRow = {
+    __total: true,
+    creditor_hospital: "รวม",
+    amount_total: rows.reduce((acc, row) => acc + toNumber(row.amount_total ?? row.ap_amount), 0),
+  };
+  totalRow.__columnTotals = Object.fromEntries(displayColumns.map((column) => [
+    column.label,
+    rows.reduce((acc, row) => acc + toNumber(rawColumnAmount(row, column)), 0),
+  ]));
+
+  renderTable(
+    "#trangMonthlyTable",
+    ["รพช.เจ้าหนี้", ...displayColumns.map((column) => column.label), "รวม"],
+    rows.length ? [...rows, totalRow] : [],
+    (row) => [
+      row.__total ? "รวม" : row.creditor_hospital,
+      ...displayColumns.map((column) => rawExcelMoney(rawColumnAmount(row, column))),
+      rawExcelMoney(row.amount_total ?? row.ap_amount),
+    ],
+    displayColumns.map((_, index) => index + 1).concat(displayColumns.length + 1),
+  );
 }
 
 function sortTrangRows() {

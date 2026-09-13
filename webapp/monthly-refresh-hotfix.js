@@ -3,11 +3,10 @@
     return;
   }
 
-  // Dashboard opens on the latest period returned by the Sheet. A calendar-month
-  // fallback is used only when the Sheet does not provide a period.
-  const DEFAULT_MONTHLY_PERIOD = "";
+  // Open the imported August reporting package first; users can switch periods
+  // and the Sheet remains the primary source whenever it has records for a period.
+  const DEFAULT_MONTHLY_PERIOD = "สิงหาคม 2569";
   const originalBackendSaveMonthlyEntries = backendSaveMonthlyEntries;
-  const fallback = window.JULY_2569_FALLBACK || null;
   const TRIAL_BALANCE_OVERRIDES = {
     "มิถุนายน 2569": [
       { period: "มิถุนายน 2569", account_key: "AR_OP_UC_OUT_CUP_IN_PROVINCE", account_code: "1102050101.203", hospital: "รพ.ตรัง", amount: 50281525 },
@@ -38,7 +37,7 @@
       document.querySelector("#periodSelect")?.addEventListener("change", (event) => {
         refreshDashboardForMonthlyPeriod({ period: event.target.value });
       });
-      refreshDashboardForMonthlyPeriod({ period: state.data?.period || DEFAULT_MONTHLY_PERIOD || getCurrentThaiPeriod() });
+      refreshDashboardForMonthlyPeriod({ period: DEFAULT_MONTHLY_PERIOD || state.data?.period || getCurrentThaiPeriod() });
     });
   });
 
@@ -73,16 +72,17 @@
         if (!result?.ok) return;
         records = (result.records || []).filter((record) => normalizePeriod(record.period) === period);
       }
-      applyMonthlyDashboard(period, completeMonthlyRecords(period, records));
+      applyMonthlyDashboard(period, completeMonthlyRecords(period, records), records.length > 0);
     } catch {
-      applyMonthlyDashboard(period, completeMonthlyRecords(period, []));
+      applyMonthlyDashboard(period, completeMonthlyRecords(period, []), false);
     }
   }
 
-  function applyMonthlyDashboard(period, records) {
+  function applyMonthlyDashboard(period, records, fromSheet) {
     const hospitals = collectHospitals(records);
     const matrix = buildMatrix(hospitals, records);
     const ledgerRows = records.map((record) => ({
+      ...record,
       period,
       payer_hospital: record.payer_hospital,
       creditor_hospital: record.creditor_hospital,
@@ -104,7 +104,7 @@
       ...(state.data || {}),
       period,
       hospitals,
-      source: "MonthlyEntries",
+      source: fromSheet ? "MonthlyEntries" : "AugustFiles",
       monthly_record_count: records.length,
       ledger_rows: ledgerRows,
       matrix,
@@ -113,7 +113,7 @@
       reconciliation: buildReconciliation(hospitals, matrix, trialTotals),
       trang_comparison: buildTrangComparison(matrix, hospitals),
     };
-    state.dataSource = "sheet";
+    state.dataSource = fromSheet ? "sheet" : "local";
 
     syncControls(period, payloadPayer(records));
     renderAll();
@@ -121,6 +121,7 @@
 
   function completeMonthlyRecords(period, records) {
     const normalizedPeriod = normalizePeriod(period);
+    const fallback = getFallback(normalizedPeriod);
     const fallbackRecords = fallback?.period === normalizedPeriod ? fallback.monthlyRecords || [] : [];
     if (!fallbackRecords.length) {
       return (records || []).filter((record) => normalizePeriod(record.period) === normalizedPeriod);
@@ -133,13 +134,15 @@
     (records || [])
       .filter((record) => normalizePeriod(record.period) === normalizedPeriod)
       .forEach((record) => {
-        byKey.set(monthlyKey(record), { ...record, period: normalizedPeriod });
+        const key = monthlyKey(record);
+        byKey.set(key, { ...(byKey.get(key) || {}), ...record, period: normalizedPeriod });
       });
     return [...byKey.values()];
   }
 
   function completeTrialRows(period, rows) {
     const normalizedPeriod = normalizePeriod(period);
+    const fallback = getFallback(normalizedPeriod);
     const fallbackRows = fallback?.period === normalizedPeriod ? fallback.trialBalanceRows || [] : [];
     const byKey = new Map();
     fallbackRows.forEach((row) => {
@@ -151,6 +154,11 @@
         byKey.set(trialKey(row), { ...row, period: normalizedPeriod });
       });
     return [...byKey.values()];
+  }
+
+  function getFallback(period) {
+    return [window.AUGUST_2569_FALLBACK, window.JULY_2569_FALLBACK]
+      .find((item) => item?.period === period) || null;
   }
 
   function monthlyKey(record) {

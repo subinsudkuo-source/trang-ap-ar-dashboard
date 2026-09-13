@@ -290,6 +290,26 @@ main {
   min-height: 430px;
 }
 
+.chart-aging {
+  max-height: 620px;
+  overflow: auto;
+}
+
+.panel-note {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.aging-table-wrap table {
+  min-width: 980px;
+}
+
+.aging-table-wrap tbody tr:last-child {
+  background: #e8f3f2;
+  font-weight: 800;
+}
+
 .bar-label {
   fill: var(--ink);
   font-size: 13px;

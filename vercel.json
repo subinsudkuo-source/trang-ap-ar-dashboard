@@ -28,6 +28,10 @@
     {
       "source": "/july-2569-data.js",
       "destination": "/webapp/july-2569-data.js"
+    },
+    {
+      "source": "/august-2569-data.js",
+      "destination": "/webapp/august-2569-data.js"
     }
   ]
 }

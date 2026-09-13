@@ -4,12 +4,13 @@ const BACKEND_URL_KEY = "trang-ap-ar-dashboard-backend-url";
 const DEFAULT_BACKEND_URL = "https://script.google.com/macros/s/AKfycbwsWeRZDYzGV3Y0Dh-FODAQgBuk0s5yiJL-8mturr4NXbjOZxPpKJsvgREKzWm_crqq/exec";
 const ALL_HOSPITALS_VALUE = "";
 const ALL_HOSPITALS_LABEL = "ทั้งจังหวัด";
+const DEFAULT_HOSPITAL = "รพ.ตรัง";
 
 const state = {
   data: null,
   dataSource: "local",
   view: "dashboard",
-  selectedHospital: ALL_HOSPITALS_VALUE,
+  selectedHospital: DEFAULT_HOSPITAL,
   trangSort: "net",
   monthly: loadMonthly(),
   trialBalanceUpload: {
@@ -50,6 +51,18 @@ const monthOptions = [
   "มีนาคม 2570",
 ];
 
+function getCurrentThaiPeriod() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Bangkok",
+    month: "numeric",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const month = Number(parts.find((part) => part.type === "month")?.value || 1);
+  const year = Number(parts.find((part) => part.type === "year")?.value || new Date().getFullYear()) + 543;
+  const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+  return `${monthNames[month - 1]} ${year}`;
+}
+
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
@@ -66,7 +79,9 @@ async function init() {
       hydrateMonthlyRecords(bootstrap.monthlyEntries.records);
     }
     state.userEmail = bootstrap?.userEmail || window.APPS_SCRIPT_BOOTSTRAP?.userEmail || "";
-    state.selectedHospital = ALL_HOSPITALS_VALUE;
+    state.selectedHospital = state.data.hospitals.includes(DEFAULT_HOSPITAL)
+      ? DEFAULT_HOSPITAL
+      : ALL_HOSPITALS_VALUE;
     setupControls();
     renderAll();
   } catch (error) {
@@ -140,7 +155,7 @@ function showLoading() {
 function setupControls() {
   fillSelect("#periodSelect", [state.data.period, ...monthOptions.filter((m) => m !== state.data.period)], state.data.period);
   fillSelect("#hospitalSelect", [ALL_HOSPITALS_VALUE, ...state.data.hospitals], state.selectedHospital);
-  fillSelect("#entryPeriod", monthOptions, "พฤษภาคม 2569");
+  fillSelect("#entryPeriod", monthOptions, getCurrentThaiPeriod());
   fillSelect("#entryPayer", state.data.hospitals, state.data.hospitals[0]);
   fillSelect("#trialUploadPeriod", [state.data.period, ...monthOptions.filter((m) => m !== state.data.period)], state.data.period);
   fillSelect("#rawPeriodSelect", [state.data.period, ...monthOptions.filter((m) => m !== state.data.period)], state.data.period);

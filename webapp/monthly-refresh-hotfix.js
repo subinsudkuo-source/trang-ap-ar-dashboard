@@ -3,7 +3,9 @@
     return;
   }
 
-  const DEFAULT_MONTHLY_PERIOD = "กรกฎาคม 2569";
+  // Dashboard opens on the latest period returned by the Sheet. A calendar-month
+  // fallback is used only when the Sheet does not provide a period.
+  const DEFAULT_MONTHLY_PERIOD = "";
   const originalBackendSaveMonthlyEntries = backendSaveMonthlyEntries;
   const fallback = window.JULY_2569_FALLBACK || null;
   const TRIAL_BALANCE_OVERRIDES = {
@@ -36,7 +38,7 @@
       document.querySelector("#periodSelect")?.addEventListener("change", (event) => {
         refreshDashboardForMonthlyPeriod({ period: event.target.value });
       });
-      refreshDashboardForMonthlyPeriod({ period: DEFAULT_MONTHLY_PERIOD || state.data?.period || document.querySelector("#periodSelect")?.value || document.querySelector("#entryPeriod")?.value });
+      refreshDashboardForMonthlyPeriod({ period: state.data?.period || DEFAULT_MONTHLY_PERIOD || getCurrentThaiPeriod() });
     });
   });
 
@@ -59,7 +61,7 @@
   }
 
   async function refreshDashboardForMonthlyPeriod(payload) {
-    const period = payload.period || DEFAULT_MONTHLY_PERIOD || state.data?.period || document.querySelector("#periodSelect")?.value || document.querySelector("#entryPeriod")?.value;
+    const period = payload.period || state.data?.period || DEFAULT_MONTHLY_PERIOD || getCurrentThaiPeriod();
     if (!period) return;
 
     try {

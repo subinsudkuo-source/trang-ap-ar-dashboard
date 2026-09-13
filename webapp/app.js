@@ -386,7 +386,9 @@ function renderTrangSummaryTable() {
     money(row.selected_payable_to_counterparty),
     money(row.counterparty_payable_to_selected),
     money(row.net_for_selected),
-    row.net_for_selected >= 0 ? `${row.counterparty_hospital} สุทธิรับ` : `${row.counterparty_hospital} สุทธิจ่าย`,
+    row.net_for_selected >= 0
+      ? `${isAllHospitals() ? row.counterparty_hospital : selectedLabel} สุทธิรับ`
+      : `${isAllHospitals() ? row.counterparty_hospital : selectedLabel} สุทธิจ่าย`,
   ], [1, 2, 3]);
 }
 

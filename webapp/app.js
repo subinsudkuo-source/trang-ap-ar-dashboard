@@ -426,8 +426,12 @@ function renderTrangPayableMonthly() {
     label: column.label,
     amount: periodRows.reduce((acc, row) => acc + toNumber(rawColumnAmount(row, column)), 0),
   }));
+  const chartTotals = totals.filter((row) =>
+    !row.label.includes("OP Anywhere") &&
+    (!row.label.startsWith("ปีงบ") && !row.label.startsWith("ก่อนปีงบ") || row.amount > 0)
+  );
   const total = periodRows.reduce((acc, row) => acc + toNumber(row.amount_total ?? row.ap_amount), 0);
-  const peak = totals.reduce((best, row) => row.amount > best.amount ? row : best, { label: "-", amount: 0 });
+  const peak = chartTotals.reduce((best, row) => row.amount > best.amount ? row : best, { label: "-", amount: 0 });
   const currentColumn = rawPeriodColumnLabel(normalizeRawPeriod(period));
   const beforeCurrent = totals.filter((row) => row.label !== currentColumn).reduce((acc, row) => acc + row.amount, 0);
 
@@ -440,11 +444,11 @@ function renderTrangPayableMonthly() {
     summaryPill("สัดส่วนเดือนสูงสุด", total ? `${((peak.amount / total) * 100).toFixed(1)}%` : "-"),
   ].join("");
 
-  renderBarChart("#trangMonthlyChart", totals, {
+  renderBarChart("#trangMonthlyChart", chartTotals, {
     labelKey: "label",
     valueKey: "amount",
     color: "#c7483c",
-    maxRows: totals.length,
+    maxRows: chartTotals.length,
   });
   renderPayableAgingTable(periodRows, columns);
 }

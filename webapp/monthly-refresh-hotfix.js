@@ -95,7 +95,10 @@
       "รวมเป็นเงิน": amount(record.ap_amount),
     }));
     const trialRows = completeTrialRows(period, mergeTrialBalanceOverrides(state.data?.trial_balance_rows || [], period));
-    const trialTotals = getTrialTotals(trialRows, period);
+    const trialTotals = completeTrialTotals(
+      getTrialTotals(trialRows, period),
+      state.data?.reconciliation || [],
+    );
 
     state.data = {
       ...(state.data || {}),
@@ -198,6 +201,21 @@
           totals[row.hospital].ar = (totals[row.hospital].ar || 0) + amount(row.amount);
         }
       });
+    return totals;
+  }
+
+  function completeTrialTotals(trialTotals, reconciliationRows) {
+    const totals = { ...trialTotals };
+    reconciliationRows.forEach((row) => {
+      if (!row.hospital) return;
+      totals[row.hospital] ||= {};
+      if (totals[row.hospital].ap === undefined && row.ap_trial_balance !== undefined) {
+        totals[row.hospital].ap = amount(row.ap_trial_balance);
+      }
+      if (totals[row.hospital].ar === undefined && row.ar_trial_balance !== undefined) {
+        totals[row.hospital].ar = amount(row.ar_trial_balance);
+      }
+    });
     return totals;
   }
 
